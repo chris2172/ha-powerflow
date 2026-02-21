@@ -42,14 +42,18 @@ require_once plugin_dir_path(__FILE__) . 'includes/shortcode.php';
 /* -------------------------------------------------------
    ADD SETTINGS LINK
 ------------------------------------------------------- */
-function ha_powerflow_add_settings_link($links) {
-    $settings_link = '<a href="admin.php?page=ha-powerflow">Settings</a>';
-    array_unshift($links, $settings_link);
-    return $links;
-}
-add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'ha_powerflow_add_settings_link');
-
 add_action('admin_enqueue_scripts', 'ha_powerflow_admin_scripts');
-function ha_powerflow_admin_scripts() {
+function ha_powerflow_admin_scripts($hook) {
+
+    // Only load scripts on the plugin settings page
+    if ($hook !== 'settings_page_ha_powerflow') {
+        return;
+    }
+
+
+    wp_enqueue_media();   // REQUIRED for the media uploader
     wp_enqueue_script('jquery');
 }
+
+
+

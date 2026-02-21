@@ -265,52 +265,48 @@ http:
                         <?php
                         $solar = [
                             'pv_power'  => 'PV Power Entity',
-                            'pv_energy' => 'PV Energy Entity'
+                            'pv_energy' => 'PV Energy Entity',
                         ];
-
-                        foreach ($solar as $key => $label):
-                            $value = get_option('ha_powerflow_' . $key);
                         ?>
-                            <table class="form-table">
-                            <?php foreach ($solar as $key => $label): ?>
-                                <tr>
-                                    <th scope="row"><?php echo esc_html($label); ?></th>
-                                    <td>
 
-                                        <!-- Entity ID -->
-                                        <input type="text"
-                                            name="ha_powerflow_<?php echo esc_attr($key); ?>"
-                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key)); ?>"
-                                            placeholder="Entity ID"
-                                            style="width:200px;">
+                        <table class="form-table">
+                        <?php foreach ($solar as $key => $label): ?>
+                            <tr>
+                                <th scope="row"><?php echo esc_html($label); ?></th>
+                                <td>
 
-                                        <!-- Rotation -->
-                                        <input type="number"
-                                            name="ha_powerflow_<?php echo esc_attr($key); ?>_rot"
-                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_rot')); ?>"
-                                            placeholder="Rot"
-                                            style="width:80px; margin-left:10px;">
+                                    <!-- Entity ID -->
+                                    <input type="text"
+                                        name="ha_powerflow_<?php echo esc_attr($key); ?>"
+                                        value="<?php echo esc_attr(get_option('ha_powerflow_' . $key)); ?>"
+                                        placeholder="Entity ID"
+                                        style="width:200px;">
 
-                                        <!-- X Position -->
-                                        <input type="number"
-                                            name="ha_powerflow_<?php echo esc_attr($key); ?>_x_pos"
-                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_x_pos')); ?>"
-                                            placeholder="X"
-                                            style="width:80px; margin-left:10px;">
+                                    <!-- Rotation -->
+                                    <input type="number"
+                                        name="ha_powerflow_<?php echo esc_attr($key); ?>_rot"
+                                        value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_rot')); ?>"
+                                        placeholder="Rot"
+                                        style="width:80px; margin-left:10px;">
 
-                                        <!-- Y Position -->
-                                        <input type="number"
-                                            name="ha_powerflow_<?php echo esc_attr($key); ?>_y_pos"
-                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_y_pos')); ?>"
-                                            placeholder="Y"
-                                            style="width:80px; margin-left:10px;">
+                                    <!-- X Position -->
+                                    <input type="number"
+                                        name="ha_powerflow_<?php echo esc_attr($key); ?>_x_pos"
+                                        value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_x_pos')); ?>"
+                                        placeholder="X"
+                                        style="width:80px; margin-left:10px;">
 
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </table>
+                                    <!-- Y Position -->
+                                    <input type="number"
+                                        name="ha_powerflow_<?php echo esc_attr($key); ?>_y_pos"
+                                        value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_y_pos')); ?>"
+                                        placeholder="Y"
+                                        style="width:80px; margin-left:10px;">
 
+                                </td>
+                            </tr>
                         <?php endforeach; ?>
+                        </table>
                     </div>
                 </div>
 

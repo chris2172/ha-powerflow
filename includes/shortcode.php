@@ -379,73 +379,135 @@ console.log("Default image URL:", "<?php echo esc_js($default_image); ?>");
 
 
         <?php if ($battery_enabled): ?>
-        const batteryPower = document.getElementById("txt_battery_power_" + instanceId);
-        if (batteryPower) {
+            const batteryPower = document.getElementById("txt_battery_power_" + instanceId);
+            if (batteryPower) {
 
-            // Always set X/Y first (with fallback defaults)
-            const battX = <?php echo ha_pf_value('battery_power_x_pos', 360); ?>;
-            const battY = <?php echo ha_pf_value('battery_power_y_pos', 665); ?>;
+                // Always set X/Y first (with fallback defaults)
+                const battX = <?php echo ha_pf_value('battery_power_x_pos', 360); ?>;
+                const battY = <?php echo ha_pf_value('battery_power_y_pos', 665); ?>;
 
-            batteryPower.setAttribute("x", battX);
-            batteryPower.setAttribute("y", battY);
+                batteryPower.setAttribute("x", battX);
+                batteryPower.setAttribute("y", battY);
 
-            // Then apply rotation around the same anchor point
-            batteryPower.setAttribute(
-                "transform",
-                "rotate(" +
-                    <?php echo ha_pf_value('battery_power_rot', 0); ?> + " " +
-                    battX + " " +
-                    battY +
-                ")"
-            );
-        }
+                // Then apply rotation around the same anchor point
+                batteryPower.setAttribute(
+                    "transform",
+                    "rotate(" +
+                        <?php echo ha_pf_value('battery_power_rot', 0); ?> + " " +
+                        battX + " " +
+                        battY +
+                    ")"
+                );
+            }
 
-        const batterySOC = document.getElementById("txt_battery_soc_" + instanceId);
-        if (batterySOC) {
+            const batterySOC = document.getElementById("txt_battery_soc_" + instanceId);
+            if (batterySOC) {
 
-            // Always set X/Y first (with fallback defaults)
-            const battSocX = <?php echo ha_pf_value('battery_soc_x_pos', 360); ?>;
-            const battSocY = <?php echo ha_pf_value('battery_soc_y_pos', 685); ?>;
+                // Always set X/Y first (with fallback defaults)
+                const battSocX = <?php echo ha_pf_value('battery_soc_x_pos', 360); ?>;
+                const battSocY = <?php echo ha_pf_value('battery_soc_y_pos', 685); ?>;
 
-            batterySOC.setAttribute("x", battSocX);
-            batterySOC.setAttribute("y", battSocY);
+                batterySOC.setAttribute("x", battSocX);
+                batterySOC.setAttribute("y", battSocY);
 
-            // Then apply rotation around the same anchor point
-            batterySOC.setAttribute(
-                "transform",
-                "rotate(" +
-                    <?php echo ha_pf_value('battery_soc_rot', 0); ?> + " " +
-                    battSocX + " " +
-                    battSocY +
-                ")"
-            );
-        }
+                // Then apply rotation around the same anchor point
+                batterySOC.setAttribute(
+                    "transform",
+                    "rotate(" +
+                        <?php echo ha_pf_value('battery_soc_rot', 0); ?> + " " +
+                        battSocX + " " +
+                        battSocY +
+                    ")"
+                );
+            }
+
+            const batteryOut = document.getElementById("txt_battery_energy_out_" + instanceId);
+            if (batteryOut) {
+
+                // Always set X/Y first (with fallback defaults)
+                const battOutX = <?php echo ha_pf_value('battery_energy_out_x_pos', 14); ?>;
+                const battOutY = <?php echo ha_pf_value('battery_energy_out_y_pos', 665); ?>;
+
+                batteryOut.setAttribute("x", battOutX);
+                batteryOut.setAttribute("y", battOutY);
+
+                // Then apply rotation around the same anchor point
+                batteryOut.setAttribute(
+                    "transform",
+                    "rotate(" +
+                        <?php echo ha_pf_value('battery_energy_out_rot', 0); ?> + " " +
+                        battOutX + " " +
+                        battOutY +
+                    ")"
+                );
+            }
 
 
-        const batteryOut = document.getElementById("txt_battery_energy_out_" + instanceId);
-        if (batteryOut) {
-            batteryOut.setAttribute("x", 14);
-            batteryOut.setAttribute("y", 665);
-        }
+            const batteryIn = document.getElementById("txt_battery_energy_in_" + instanceId);
+            if (batteryIn) {
 
-        const batteryIn = document.getElementById("txt_battery_energy_in_" + instanceId);
-        if (batteryIn) {
-            batteryIn.setAttribute("x", 14);
-            batteryIn.setAttribute("y", 685);
-        }
+                // Always set X/Y first (with fallback defaults)
+                const battInX = <?php echo ha_pf_value('battery_energy_in_x_pos', 14); ?>;
+                const battInY = <?php echo ha_pf_value('battery_energy_in_y_pos', 685); ?>;
+
+                batteryIn.setAttribute("x", battInX);
+                batteryIn.setAttribute("y", battInY);
+
+                // Then apply rotation around the same anchor point
+                batteryIn.setAttribute(
+                    "transform",
+                    "rotate(" +
+                        <?php echo ha_pf_value('battery_energy_in_rot', 0); ?> + " " +
+                        battInX + " " +
+                        battInY +
+                    ")"
+                );
+            }
+
         <?php endif; ?>
 
         const gridIn = document.getElementById("txt_grid_energy_in_" + instanceId);
         if (gridIn) {
-            gridIn.setAttribute("x", 740);
-            gridIn.setAttribute("y", 70);
+
+            // Always set X/Y first (with fallback defaults)
+            const gridInX = <?php echo ha_pf_value('grid_energy_in_x_pos', 740); ?>;
+            const gridInY = <?php echo ha_pf_value('grid_energy_in_y_pos', 70); ?>;
+
+            gridIn.setAttribute("x", gridInX);
+            gridIn.setAttribute("y", gridInY);
+
+            // Then apply rotation around the same anchor point
+            gridIn.setAttribute(
+                "transform",
+                "rotate(" +
+                    <?php echo ha_pf_value('grid_energy_in_rot', 0); ?> + " " +
+                    gridInX + " " +
+                    gridInY +
+                ")"
+            );
         }
 
         const gridOut = document.getElementById("txt_grid_energy_out_" + instanceId);
         if (gridOut) {
-            gridOut.setAttribute("x", 740);
-            gridOut.setAttribute("y", 90);
+
+            // Always set X/Y first (with fallback defaults)
+            const gridOutX = <?php echo ha_pf_value('grid_energy_out_x_pos', 740); ?>;
+            const gridOutY = <?php echo ha_pf_value('grid_energy_out_y_pos', 90); ?>;
+
+            gridOut.setAttribute("x", gridOutX);
+            gridOut.setAttribute("y", gridOutY);
+
+            // Then apply rotation around the same anchor point
+            gridOut.setAttribute(
+                "transform",
+                "rotate(" +
+                    <?php echo ha_pf_value('grid_energy_out_rot', 0); ?> + " " +
+                    gridOutX + " " +
+                    gridOutY +
+                ")"
+            );
         }
+
 
         <?php if ($solar_enabled): ?>
         const pvPower = document.getElementById("txt_pv_power_" + instanceId);
@@ -469,19 +531,50 @@ console.log("Default image URL:", "<?php echo esc_js($default_image); ?>");
             );
         }
 
-
         const pvEnergy = document.getElementById("txt_pv_energy_" + instanceId);
         if (pvEnergy) {
-            pvEnergy.setAttribute("x", 14);
-            pvEnergy.setAttribute("y", 70);
+
+            // Always set X/Y first (with fallback defaults)
+            const pvEnergyX = <?php echo ha_pf_value('pv_energy_x_pos', 14); ?>;
+            const pvEnergyY = <?php echo ha_pf_value('pv_energy_y_pos', 70); ?>;
+
+            pvEnergy.setAttribute("x", pvEnergyX);
+            pvEnergy.setAttribute("y", pvEnergyY);
+
+            // Then apply rotation around the same anchor point
+            pvEnergy.setAttribute(
+                "transform",
+                "rotate(" +
+                    <?php echo ha_pf_value('pv_energy_rot', 0); ?> + " " +
+                    pvEnergyX + " " +
+                    pvEnergyY +
+                ")"
+            );
         }
+
         <?php endif; ?>
 
         const loadEnergy = document.getElementById("txt_load_energy_" + instanceId);
         if (loadEnergy) {
-            loadEnergy.setAttribute("x", 360);
-            loadEnergy.setAttribute("y", 70);
+
+            // Always set X/Y first (with fallback defaults)
+            const loadEnergyX = <?php echo ha_pf_value('load_energy_x_pos', 360); ?>;
+            const loadEnergyY = <?php echo ha_pf_value('load_energy_y_pos', 70); ?>;
+
+            loadEnergy.setAttribute("x", loadEnergyX);
+            loadEnergy.setAttribute("y", loadEnergyY);
+
+            // Then apply rotation around the same anchor point
+            loadEnergy.setAttribute(
+                "transform",
+                "rotate(" +
+                    <?php echo ha_pf_value('load_energy_rot', 0); ?> + " " +
+                    loadEnergyX + " " +
+                    loadEnergyY +
+                ")"
+            );
         }
+
     }
 
     /* SECTION: Motion Path Helpers */

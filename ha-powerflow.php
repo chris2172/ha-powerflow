@@ -3,7 +3,7 @@
  * Plugin Name: HA PowerFlow
  * Plugin URI: https://chriswilmot.co.uk/ha-powerflow/
  * Description: A real-time Home Assistant power-flow dashboard with animated SVG and CSS motion paths.
- * Version: 1.0.0
+ * Version: 1.2.0
  * Author: Christopher Wilmot
  * Author URI: https://chriswilmot.co.uk/
  * License: GPLv2 or later

@@ -161,8 +161,15 @@ http:
 
                         <?php if ($img = get_option('ha_powerflow_image_url')) : ?>
                             <p><strong>Preview:</strong></p>
-                            <img src="<?php echo esc_url($img); ?>" style="max-width:200px; border:1px solid #ccc;">
+                            <img id="ha_powerflow_image_preview"
+                                src="<?php echo esc_url($img); ?>"
+                                style="max-width:200px; border:1px solid #ccc;">
+                        <?php else : ?>
+                            <img id="ha_powerflow_image_preview"
+                                src=""
+                                style="max-width:200px; border:1px solid #ccc; display:none;">
                         <?php endif; ?>
+
 
 
                         <!-- Mandatory Fields -->
@@ -426,11 +433,17 @@ jQuery(document).ready(function($){
                 action: 'ha_powerflow_copy_image',
                 attachment_id: attachment.id
             }, function(response){
-                if (response.success) {
-                    $('#ha_powerflow_image_url').val(response.data.url);
-                } else {
-                    alert('Error copying image');
-                }
+            if (response.success) {
+                const newUrl = response.data.url;
+
+                // Update the text field
+                $('#ha_powerflow_image_url').val(newUrl);
+
+                // Update the preview image live
+                $('#ha_powerflow_image_preview')
+                    .attr('src', newUrl)
+                    .show();
+            }
             });
         });
 

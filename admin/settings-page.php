@@ -171,7 +171,6 @@ http:
                         <?php endif; ?>
 
 
-
                         <!-- Mandatory Fields -->
                         <?php
                         $mandatory = [
@@ -509,4 +508,4 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
-<?php } ?>
+<?php } 

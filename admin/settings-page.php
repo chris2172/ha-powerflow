@@ -186,13 +186,42 @@ http:
                         foreach ($mandatory as $key => $label):
                             $value = get_option('ha_powerflow_' . $key);
                         ?>
-                            <p>
-                                <label><strong><?php echo esc_html($label); ?>:</strong></label><br>
-                                <input type="text"
-                                       name="ha_powerflow_<?php echo esc_attr($key); ?>"
-                                       value="<?php echo esc_attr($value); ?>"
-                                       style="width:100%; max-width:400px;">
-                            </p>
+                            <table class="form-table">
+
+                                <tr>
+                                    <th scope="row"><?php echo esc_html($label); ?></th>
+                                    <td>
+                                        <!-- Entity ID -->
+                                        <input type="text"
+                                            name="ha_powerflow_<?php echo esc_attr($key); ?>"
+                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key)); ?>"
+                                            placeholder="Entity ID"
+                                            style="width:200px;">
+
+                                        <!-- Rotation -->
+                                        <input type="number"
+                                            name="ha_powerflow_<?php echo esc_attr($key); ?>_rot"
+                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_rot')); ?>"
+                                            placeholder="Rot"
+                                            style="width:80px; margin-left:10px;">
+
+                                        <!-- X Position -->
+                                        <input type="number"
+                                            name="ha_powerflow_<?php echo esc_attr($key); ?>_x_pos"
+                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_x_pos')); ?>"
+                                            placeholder="X"
+                                            style="width:80px; margin-left:10px;">
+
+                                        <!-- Y Position -->
+                                        <input type="number"
+                                            name="ha_powerflow_<?php echo esc_attr($key); ?>_y_pos"
+                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_y_pos')); ?>"
+                                            placeholder="Y"
+                                            style="width:80px; margin-left:10px;">
+                                    </td>
+                                </tr>
+
+                        </table>
                         <?php endforeach; ?>
 
                     </div>
@@ -219,45 +248,108 @@ http:
                         foreach ($solar as $key => $label):
                             $value = get_option('ha_powerflow_' . $key);
                         ?>
-                            <p>
-                                <label><strong><?php echo esc_html($label); ?>:</strong></label><br>
-                                <input type="text"
-                                       name="ha_powerflow_<?php echo esc_attr($key); ?>"
-                                       value="<?php echo esc_attr($value); ?>"
-                                       style="width:100%; max-width:400px;">
-                            </p>
+                            <table class="form-table">
+                            <?php foreach ($solar as $key => $label): ?>
+                                <tr>
+                                    <th scope="row"><?php echo esc_html($label); ?></th>
+                                    <td>
+
+                                        <!-- Entity ID -->
+                                        <input type="text"
+                                            name="ha_powerflow_<?php echo esc_attr($key); ?>"
+                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key)); ?>"
+                                            placeholder="Entity ID"
+                                            style="width:200px;">
+
+                                        <!-- Rotation -->
+                                        <input type="number"
+                                            name="ha_powerflow_<?php echo esc_attr($key); ?>_rot"
+                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_rot')); ?>"
+                                            placeholder="Rot"
+                                            style="width:80px; margin-left:10px;">
+
+                                        <!-- X Position -->
+                                        <input type="number"
+                                            name="ha_powerflow_<?php echo esc_attr($key); ?>_x_pos"
+                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_x_pos')); ?>"
+                                            placeholder="X"
+                                            style="width:80px; margin-left:10px;">
+
+                                        <!-- Y Position -->
+                                        <input type="number"
+                                            name="ha_powerflow_<?php echo esc_attr($key); ?>_y_pos"
+                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_y_pos')); ?>"
+                                            placeholder="Y"
+                                            style="width:80px; margin-left:10px;">
+
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </table>
+
                         <?php endforeach; ?>
                     </div>
                 </div>
 
-                <!-- Battery Panel -->
-                <div class="ha-panel" id="battery-panel">
-                    <div class="ha-panel-header">
-                        <span>Battery Settings</span>
-                        <span class="ha-arrow">▼</span>
-                    </div>
-                    <div class="ha-panel-body" id="battery-section">
-                        <?php
-                        $battery = [
-                            'battery_power'      => 'Battery Power Entity',
-                            'battery_energy_in'  => 'Battery Energy In Entity',
-                            'battery_energy_out' => 'Battery Energy Out Entity',
-                            'battery_soc'        => 'Battery SOC Entity'
-                        ];
+                    <!-- Battery Panel -->
+                    <div class="ha-panel" id="battery-panel">
+                        <div class="ha-panel-header">
+                            <span>Battery Settings</span>
+                            <span class="ha-arrow">▼</span>
+                        </div>
 
-                        foreach ($battery as $key => $label):
-                            $value = get_option('ha_powerflow_' . $key);
-                        ?>
-                            <p>
-                                <label><strong><?php echo esc_html($label); ?>:</strong></label><br>
-                                <input type="text"
-                                       name="ha_powerflow_<?php echo esc_attr($key); ?>"
-                                       value="<?php echo esc_attr($value); ?>"
-                                       style="width:100%; max-width:400px;">
-                            </p>
-                        <?php endforeach; ?>
+                        <div class="ha-panel-body" id="battery-section">
+
+                            <table class="form-table">
+                            <?php
+                            $battery = [
+                                'battery_power'      => 'Battery Power Entity',
+                                'battery_energy_in'  => 'Battery Energy In Entity',
+                                'battery_energy_out' => 'Battery Energy Out Entity',
+                                'battery_soc'        => 'Battery SOC Entity'
+                            ];
+
+                            foreach ($battery as $key => $label): ?>
+                                <tr>
+                                    <th scope="row"><?php echo esc_html($label); ?></th>
+                                    <td>
+
+                                        <!-- Entity ID -->
+                                        <input type="text"
+                                            name="ha_powerflow_<?php echo esc_attr($key); ?>"
+                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key)); ?>"
+                                            placeholder="Entity ID"
+                                            style="width:200px;">
+
+                                        <!-- Rotation -->
+                                        <input type="number"
+                                            name="ha_powerflow_<?php echo esc_attr($key); ?>_rot"
+                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_rot')); ?>"
+                                            placeholder="Rot"
+                                            style="width:80px; margin-left:10px;">
+
+                                        <!-- X Position -->
+                                        <input type="number"
+                                            name="ha_powerflow_<?php echo esc_attr($key); ?>_x_pos"
+                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_x_pos')); ?>"
+                                            placeholder="X"
+                                            style="width:80px; margin-left:10px;">
+
+                                        <!-- Y Position -->
+                                        <input type="number"
+                                            name="ha_powerflow_<?php echo esc_attr($key); ?>_y_pos"
+                                            value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_y_pos')); ?>"
+                                            placeholder="Y"
+                                            style="width:80px; margin-left:10px;">
+
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </table>
+
+                        </div>
                     </div>
-                </div>
+
 
                 <!-- EV Panel -->
                 <div class="ha-panel" id="ev-panel">
@@ -265,26 +357,57 @@ http:
                         <span>EV Settings</span>
                         <span class="ha-arrow">▼</span>
                     </div>
+
                     <div class="ha-panel-body" id="ev-section">
+
+                        <table class="form-table">
                         <?php
                         $ev = [
                             'ev_power' => 'EV Power Entity',
                             'ev_soc'   => 'EV SOC Entity'
                         ];
 
-                        foreach ($ev as $key => $label):
-                            $value = get_option('ha_powerflow_' . $key);
-                        ?>
-                            <p>
-                                <label><strong><?php echo esc_html($label); ?>:</strong></label><br>
-                                <input type="text"
-                                       name="ha_powerflow_<?php echo esc_attr($key); ?>"
-                                       value="<?php echo esc_attr($value); ?>"
-                                       style="width:100%; max-width:400px;">
-                            </p>
+                        foreach ($ev as $key => $label): ?>
+                            <tr>
+                                <th scope="row"><?php echo esc_html($label); ?></th>
+                                <td>
+
+                                    <!-- Entity ID -->
+                                    <input type="text"
+                                        name="ha_powerflow_<?php echo esc_attr($key); ?>"
+                                        value="<?php echo esc_attr(get_option('ha_powerflow_' . $key)); ?>"
+                                        placeholder="Entity ID"
+                                        style="width:200px;">
+
+                                    <!-- Rotation -->
+                                    <input type="number"
+                                        name="ha_powerflow_<?php echo esc_attr($key); ?>_rot"
+                                        value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_rot')); ?>"
+                                        placeholder="Rot"
+                                        style="width:80px; margin-left:10px;">
+
+                                    <!-- X Position -->
+                                    <input type="number"
+                                        name="ha_powerflow_<?php echo esc_attr($key); ?>_x_pos"
+                                        value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_x_pos')); ?>"
+                                        placeholder="X"
+                                        style="width:80px; margin-left:10px;">
+
+                                    <!-- Y Position -->
+                                    <input type="number"
+                                        name="ha_powerflow_<?php echo esc_attr($key); ?>_y_pos"
+                                        value="<?php echo esc_attr(get_option('ha_powerflow_' . $key . '_y_pos')); ?>"
+                                        placeholder="Y"
+                                        style="width:80px; margin-left:10px;">
+
+                                </td>
+                            </tr>
                         <?php endforeach; ?>
+                        </table>
+
                     </div>
                 </div>
+
 
             </div> <!-- END RIGHT COLUMN -->
 

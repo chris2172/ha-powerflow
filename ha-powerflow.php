@@ -12,6 +12,9 @@
 
 if (!defined('ABSPATH')) exit;
 
+require_once plugin_dir_path(__FILE__) . 'includes/ajax-copy-image.php';
+
+
 /* -------------------------------------------------------
    CREATE UPLOAD DIRECTORY ON ACTIVATION
 ------------------------------------------------------- */
@@ -45,15 +48,15 @@ require_once plugin_dir_path(__FILE__) . 'includes/shortcode.php';
 add_action('admin_enqueue_scripts', 'ha_powerflow_admin_scripts');
 function ha_powerflow_admin_scripts($hook) {
 
-    // Only load scripts on the plugin settings page
-    if ($hook !== 'settings_page_ha_powerflow') {
+    // Correct hook for a top-level menu page
+    if ($hook !== 'toplevel_page_ha-powerflow') {
         return;
     }
 
-
-    wp_enqueue_media();   // REQUIRED for the media uploader
+    wp_enqueue_media();
     wp_enqueue_script('jquery');
 }
+
 
 
 

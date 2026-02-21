@@ -170,12 +170,34 @@ http:
                                 style="max-width:200px; border:1px solid #ccc; display:none;">
                         <?php endif; ?>
 
+                        <h2>Home Assistant Connection</h2>
+                        <table class="form-table">
+                            <tr>
+                                <th scope="row">HA URL</th>
+                                <td>
+                                    <input type="text"
+                                        name="ha_powerflow_ha_url"
+                                        value="<?php echo esc_attr(get_option('ha_powerflow_ha_url')); ?>"
+                                        style="width:100%; max-width:400px;">
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <th scope="row">HA Token</th>
+                                <td>
+                                    <input type="text"
+                                        name="ha_powerflow_ha_token"
+                                        value="<?php echo esc_attr(get_option('ha_powerflow_ha_token')); ?>"
+                                        style="width:100%; max-width:400px;">
+                                </td>
+                            </tr>
+                        </table>
+
 
                         <!-- Mandatory Fields -->
+                        <h2>Mandatory Fields</h2>
                         <?php
                         $mandatory = [
-                            'ha_url'          => 'HA URL',
-                            'ha_token'        => 'HA Token',
                             'grid_power'      => 'Grid Power Entity',
                             'grid_energy_in'  => 'Grid Energy In Entity',
                             'grid_energy_out' => 'Grid Energy Out Entity',
@@ -186,6 +208,7 @@ http:
                         foreach ($mandatory as $key => $label):
                             $value = get_option('ha_powerflow_' . $key);
                         ?>
+
                             <table class="form-table">
 
                                 <tr>

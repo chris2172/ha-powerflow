@@ -145,37 +145,25 @@ http:
                         ?>
 
                         <!-- Image Selector -->
+                        <h2>Upload Custom Image</h2>
+
                         <p>
-                            <label><strong>Image:</strong></label><br>
+                            <input type="text"
+                                id="ha_powerflow_image_url"
+                                name="ha_powerflow_image_url"
+                                value="<?php echo esc_attr(get_option('ha_powerflow_image_url')); ?>"
+                                style="width: 70%; max-width: 500px;" />
 
-                            <select name="ha_powerflow_image_url" style="width:100%; max-width:400px;">
-                                <?php if (!empty($png_files)): ?>
-                                    <?php foreach ($png_files as $file_path): ?>
-                                        <?php
-                                        $file_name = basename($file_path);
-                                        $file_url  = $assets_url . $file_name;
-                                        ?>
-                                        <option value="<?php echo esc_attr($file_url); ?>"
-                                            <?php selected($current_image, $file_url); ?>>
-                                            <?php echo esc_html($file_name); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <option value="">
-                                        <?php echo esc_html__('No PNG files found in assets folder', 'ha-powerflow'); ?>
-                                    </option>
-                                <?php endif; ?>
-                            </select>
-
-                            <small>Choose an image from the assets folder.</small>
+                            <button type="button" class="button" id="ha_powerflow_upload_button">
+                                Upload / Select Image
+                            </button>
                         </p>
 
-                        <!-- Image Preview -->
-                        <p>
-                            <img id="ha-image-preview"
-                                 src="<?php echo esc_url($current_image); ?>"
-                                 style="max-width:300px; border:1px solid #ccc; margin-top:10px;">
-                        </p>
+                        <?php if ($img = get_option('ha_powerflow_image_url')) : ?>
+                            <p><strong>Preview:</strong></p>
+                            <img src="<?php echo esc_url($img); ?>" style="max-width:200px; border:1px solid #ccc;">
+                        <?php endif; ?>
+
 
                         <!-- Mandatory Fields -->
                         <?php
@@ -407,6 +395,52 @@ http:
      PANEL + TOGGLE LOGIC
 ============================= -->
 <script>
+
+// <!-- process to upload new image or select existing image  -->
+jQuery(document).ready(function($){
+
+    let frame;
+
+    $('#ha_powerflow_upload_button').on('click', function(e){
+        e.preventDefault();
+
+        // If the media frame already exists, reopen it.
+        if (frame) {
+            frame.open();
+            return;
+        }
+
+        // Create the media frame.
+        frame = wp.media({
+            title: 'Select or Upload Image',
+            button: { text: 'Use this image' },
+            multiple: false
+        });
+
+        // When an image is selected, run a callback.
+        frame.on('select', function(){
+            const attachment = frame.state().get('selection').first().toJSON();
+
+            // Send attachment ID to AJAX
+            $.post(ajaxurl, {
+                action: 'ha_powerflow_copy_image',
+                attachment_id: attachment.id
+            }, function(response){
+                if (response.success) {
+                    $('#ha_powerflow_image_url').val(response.data.url);
+                } else {
+                    alert('Error copying image');
+                }
+            });
+        });
+
+
+        // Finally, open the modal
+        frame.open();
+    });
+
+});
+
 document.addEventListener("DOMContentLoaded", function () {
     const select = document.querySelector("select[name='ha_powerflow_image_url']");
     const preview = document.querySelector("#ha-image-preview");

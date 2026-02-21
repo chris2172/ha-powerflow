@@ -48,3 +48,8 @@ function ha_powerflow_add_settings_link($links) {
     return $links;
 }
 add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'ha_powerflow_add_settings_link');
+
+add_action('admin_enqueue_scripts', 'ha_powerflow_admin_scripts');
+function ha_powerflow_admin_scripts() {
+    wp_enqueue_script('jquery');
+}

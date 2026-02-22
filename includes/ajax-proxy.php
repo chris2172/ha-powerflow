@@ -1,91 +1,107 @@
 <?php
-if (!defined('ABSPATH')) exit;
-
 /**
- * SECTION: HA Proxy AJAX Handler
+ * includes/ajax-proxy.php
  *
- * Receives a request from the browser containing only an entity ID.
- * Makes the authenticated request to Home Assistant server-side,
- * so the HA token is never exposed in page source or browser requests.
+ * Server-side proxy for Home Assistant API requests.
  *
- * Registered for both logged-in (wp_ajax_) and logged-out (wp_ajax_nopriv_)
- * users so the dashboard works on public-facing pages.
+ * The browser sends only an entity ID and a nonce.
+ * This handler authenticates the request server-side using the stored
+ * HA token, then returns just the state and unit to the browser.
+ * The HA URL and token are never exposed to the client.
+ *
+ * Registered for both logged-in and logged-out users so that the
+ * dashboard works on public-facing WordPress pages.
  */
-function ha_powerflow_ajax_proxy() {
 
-    /* SECTION: Verify Nonce */
-    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'ha_powerflow_proxy')) {
-        wp_send_json_error(['message' => 'Invalid nonce'], 403);
-        return;
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+add_action( 'wp_ajax_ha_pf_proxy',        'ha_pf_ajax_proxy' );
+add_action( 'wp_ajax_nopriv_ha_pf_proxy', 'ha_pf_ajax_proxy' );
+
+function ha_pf_ajax_proxy() {
+
+    // --------------------------------------------------
+    // 1. Verify nonce
+    // --------------------------------------------------
+    if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'ha_pf_proxy' ) ) {
+        wp_send_json_error( [ 'message' => 'Invalid or expired request.' ], 403 );
     }
 
-    /* SECTION: Validate Entity ID */
-    $entity = isset($_POST['entity']) ? sanitize_text_field($_POST['entity']) : '';
+    // --------------------------------------------------
+    // 2. Validate entity ID
+    //    HA entity IDs are always: domain.object_id
+    //    Domain: lowercase letters and underscores only
+    //    Object ID: letters, numbers, underscores, hyphens
+    // --------------------------------------------------
+    $entity = isset( $_POST['entity'] ) ? sanitize_text_field( wp_unslash( $_POST['entity'] ) ) : '';
 
-    if (empty($entity)) {
-        wp_send_json_error(['message' => 'No entity specified'], 400);
-        return;
+    if ( empty( $entity ) ) {
+        wp_send_json_error( [ 'message' => 'No entity specified.' ], 400 );
     }
 
-    // Entity IDs must match the pattern: domain.entity_name
-    // e.g. sensor.grid_power, switch.ev_charger
-    if (!preg_match('/^[a-z_]+\.[a-zA-Z0-9_]+$/', $entity)) {
-        wp_send_json_error(['message' => 'Invalid entity ID'], 400);
-        return;
+    if ( ! preg_match( '/^[a-z_]+\.[a-zA-Z0-9_\-]+$/', $entity ) ) {
+        wp_send_json_error( [ 'message' => 'Invalid entity ID.' ], 400 );
     }
 
-    /* SECTION: Load HA Credentials (server-side only) */
-    $ha_url   = get_option('ha_powerflow_ha_url');
-    $ha_token = get_option('ha_powerflow_ha_token');
+    // --------------------------------------------------
+    // 3. Load HA credentials — server-side only
+    // --------------------------------------------------
+    $ha_url   = get_option( 'ha_powerflow_ha_url' );
+    $ha_token = get_option( 'ha_powerflow_ha_token' );
 
-    if (empty($ha_url) || empty($ha_token)) {
-        wp_send_json_error(['message' => 'Home Assistant not configured'], 500);
-        return;
+    if ( empty( $ha_url ) || empty( $ha_token ) ) {
+        wp_send_json_error( [ 'message' => 'Home Assistant is not configured.' ], 500 );
     }
 
-    $ha_url = rtrim($ha_url, '/');
+    $ha_url = rtrim( $ha_url, '/' );
 
-    /* SECTION: Make Server-Side Request to Home Assistant */
+    // --------------------------------------------------
+    // 4. Make server-side request to Home Assistant
+    // --------------------------------------------------
     $response = wp_remote_get(
-        $ha_url . '/api/states/' . $entity,
+        $ha_url . '/api/states/' . rawurlencode( $entity ),
         [
             'headers' => [
                 'Authorization' => 'Bearer ' . $ha_token,
                 'Content-Type'  => 'application/json',
             ],
-            'timeout' => 10,
-            'sslverify' => true,
+            'timeout'   => 10,
+            // sslverify defaults to true; set to false only if the admin
+            // has explicitly opted in via the "Allow self-signed SSL" setting.
+            'sslverify' => ( get_option( 'ha_powerflow_ssl_verify', '1' ) === '1' ),
         ]
     );
 
-    /* SECTION: Handle Request Errors */
-    if (is_wp_error($response)) {
-        wp_send_json_error(['message' => 'Could not reach Home Assistant: ' . $response->get_error_message()], 502);
-        return;
+    // --------------------------------------------------
+    // 5. Handle transport errors
+    //    Log the real error internally; return a generic message to the browser.
+    // --------------------------------------------------
+    if ( is_wp_error( $response ) ) {
+        error_log( 'HA PowerFlow proxy error: ' . $response->get_error_message() );
+        wp_send_json_error( [ 'message' => 'Could not reach Home Assistant.' ], 502 );
     }
 
-    $status_code = wp_remote_retrieve_response_code($response);
-    $body        = wp_remote_retrieve_body($response);
+    $status = wp_remote_retrieve_response_code( $response );
+    $body   = wp_remote_retrieve_body( $response );
 
-    if ($status_code !== 200) {
-        wp_send_json_error(['message' => 'Home Assistant returned status ' . $status_code], $status_code);
-        return;
+    if ( $status !== 200 ) {
+        error_log( 'HA PowerFlow proxy: HA returned HTTP ' . $status . ' for entity ' . $entity );
+        wp_send_json_error( [ 'message' => 'Home Assistant returned an error.' ], 502 );
     }
 
-    /* SECTION: Parse + Return HA Response */
-    $data = json_decode($body, true);
+    // --------------------------------------------------
+    // 6. Parse and return only the fields the browser needs
+    // --------------------------------------------------
+    $data = json_decode( $body, true );
 
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        wp_send_json_error(['message' => 'Invalid JSON from Home Assistant'], 502);
-        return;
+    if ( json_last_error() !== JSON_ERROR_NONE ) {
+        wp_send_json_error( [ 'message' => 'Invalid response from Home Assistant.' ], 502 );
     }
 
-    // Only return what the frontend actually needs — state and unit
-    wp_send_json_success([
-        'state' => $data['state'] ?? 'unavailable',
-        'unit'  => $data['attributes']['unit_of_measurement'] ?? '',
-    ]);
+    wp_send_json_success( [
+        'state' => isset( $data['state'] ) ? $data['state'] : 'unavailable',
+        'unit'  => isset( $data['attributes']['unit_of_measurement'] )
+                   ? $data['attributes']['unit_of_measurement']
+                   : '',
+    ] );
 }
-
-add_action('wp_ajax_ha_powerflow_proxy',        'ha_powerflow_ajax_proxy');
-add_action('wp_ajax_nopriv_ha_powerflow_proxy', 'ha_powerflow_ajax_proxy');

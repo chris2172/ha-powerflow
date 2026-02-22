@@ -1,0 +1,254 @@
+/*
+ * admin/admin.css
+ * Styles for the HA PowerFlow settings page only.
+ * Enqueued via wp_enqueue_style() — no inline styles in PHP.
+ */
+
+/* -------------------------------------------------------
+   Info / notice box
+------------------------------------------------------- */
+.ha-pf-notice {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-left: 4px solid #2271b1;
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin: 20px 0;
+}
+
+.ha-pf-notice h2 {
+    margin-top: 0;
+}
+
+.ha-pf-notice ul {
+    margin-left: 1.5em;
+    list-style: disc;
+}
+
+/* -------------------------------------------------------
+   Simple card (used for toggles, uninstall section)
+------------------------------------------------------- */
+.ha-pf-card {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin: 20px 0;
+}
+
+.ha-pf-card h2 {
+    margin-top: 0;
+}
+
+/* -------------------------------------------------------
+   Feature toggle rows
+------------------------------------------------------- */
+.ha-pf-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 380px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.ha-pf-toggle-row:last-child {
+    border-bottom: none;
+}
+
+/* Toggle switch */
+.ha-pf-switch {
+    position: relative;
+    display: inline-block;
+    width: 52px;
+    height: 28px;
+    flex-shrink: 0;
+}
+
+.ha-pf-switch input[type="checkbox"] {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.ha-pf-slider {
+    position: absolute;
+    inset: 0;
+    background: #ccc;
+    border-radius: 34px;
+    cursor: pointer;
+    transition: background 0.25s;
+}
+
+.ha-pf-slider::before {
+    content: '';
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    left: 3px;
+    bottom: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.25s;
+}
+
+.ha-pf-switch input:checked + .ha-pf-slider {
+    background: #2271b1;
+}
+
+.ha-pf-switch input:checked + .ha-pf-slider::before {
+    transform: translateX(24px);
+}
+
+/* Focus ring for accessibility */
+.ha-pf-switch input:focus-visible + .ha-pf-slider {
+    outline: 2px solid #2271b1;
+    outline-offset: 2px;
+}
+
+/* -------------------------------------------------------
+   Two-column grid
+------------------------------------------------------- */
+.ha-pf-grid {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    margin: 20px 0;
+}
+
+.ha-pf-col {
+    flex: 1;
+    min-width: 340px;
+}
+
+/* -------------------------------------------------------
+   Collapsible panels
+------------------------------------------------------- */
+.ha-pf-panel {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.ha-pf-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    font-weight: 600;
+    background: #f6f7f7;
+    border-bottom: 1px solid #e2e4e7;
+    cursor: pointer;
+    user-select: none;
+}
+
+.ha-pf-panel-header:hover {
+    background: #f0f0f1;
+}
+
+.ha-pf-panel-body {
+    padding: 16px;
+    display: none;
+}
+
+.ha-pf-panel.open .ha-pf-panel-body {
+    display: block;
+}
+
+.ha-pf-arrow {
+    display: inline-block;
+    transition: transform 0.2s ease;
+    font-size: 12px;
+    color: #50575e;
+}
+
+.ha-pf-panel.open .ha-pf-arrow {
+    transform: rotate(180deg);
+}
+
+/* -------------------------------------------------------
+   Image upload row
+------------------------------------------------------- */
+.ha-pf-image-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* -------------------------------------------------------
+   Flow path inputs
+------------------------------------------------------- */
+.ha-pf-path-label {
+    display: inline-block;
+    width: 68px;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.ha-pf-path-input {
+    width: 400px;
+    font-family: monospace;
+}
+
+label:has(.ha-pf-path-input) {
+    display: block;
+    margin-bottom: 6px;
+}
+
+/* -------------------------------------------------------
+   Colour row
+------------------------------------------------------- */
+.ha-pf-colour-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ha-pf-colour-row input[type="color"] {
+    width: 44px;
+    height: 36px;
+    padding: 2px;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* -------------------------------------------------------
+   Checkbox labels (developer tools, uninstall)
+------------------------------------------------------- */
+.ha-pf-checkbox-label {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    cursor: pointer;
+    line-height: 1.5;
+}
+
+.ha-pf-checkbox-label input[type="checkbox"] {
+    margin-top: 3px;
+    flex-shrink: 0;
+}
+
+.ha-pf-checkbox-label .description {
+    color: #646970;
+    font-style: normal;
+}
+
+/* -------------------------------------------------------
+   Responsive — stack columns below 900px
+------------------------------------------------------- */
+@media ( max-width: 900px ) {
+    .ha-pf-grid {
+        flex-direction: column;
+    }
+    .ha-pf-col {
+        width: 100%;
+    }
+    .ha-pf-path-input {
+        width: 100%;
+    }
+}

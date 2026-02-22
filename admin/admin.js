@@ -3,12 +3,13 @@
  *
  * Handles all admin-page interactivity:
  *   - Collapsible panels
- *   - Feature-toggle show/hide of optional panels
+ *   - Feature-toggle show/hide panels + toggle card state
+ *   - Colour picker live hex display
+ *   - Colour reset buttons
  *   - WordPress media uploader for background image
- *   - Colour picker reset buttons
+ *   - Unsaved-changes dirty badge
  *
- * Enqueued only on the HA PowerFlow settings page.
- * haPfAdmin (ajaxUrl, copyImageNonce) is provided via wp_localize_script().
+ * haPfAdmin (ajaxUrl, copyImageNonce) provided via wp_localize_script().
  */
 
 /* global haPfAdmin, wp */
@@ -22,40 +23,54 @@
     document.querySelectorAll( '.ha-pf-panel-header' ).forEach( function ( header ) {
         header.addEventListener( 'click', function () {
             const panel = this.closest( '.ha-pf-panel' );
-            if ( ! panel ) return;
-
-            // Don't toggle panels that are hidden by the feature-toggle logic
-            if ( panel.style.display === 'none' ) return;
-
+            if ( ! panel || panel.style.display === 'none' ) return;
             panel.classList.toggle( 'open' );
         } );
     } );
 
     // -------------------------------------------------------
-    // Feature toggles — show / hide optional panels
+    // Feature toggles — panels + card highlight
     // -------------------------------------------------------
-    function syncPanelVisibility( checkbox ) {
+    function syncToggle( checkbox ) {
         const panelId = checkbox.dataset.panel;
-        const panel   = document.getElementById( panelId );
-        if ( ! panel ) return;
+        const cardId  = checkbox.dataset.card;
+        const panel   = panelId ? document.getElementById( panelId ) : null;
+        const card    = cardId  ? document.getElementById( cardId  ) : null;
 
-        if ( checkbox.checked ) {
-            panel.style.display = '';
-            panel.classList.add( 'open' );
-        } else {
-            panel.style.display = 'none';
-            panel.classList.remove( 'open' );
+        if ( panel ) {
+            if ( checkbox.checked ) {
+                panel.style.display = '';
+                panel.classList.add( 'open' );
+            } else {
+                panel.style.display = 'none';
+                panel.classList.remove( 'open' );
+            }
+        }
+
+        if ( card ) {
+            card.classList.toggle( 'is-enabled', checkbox.checked );
         }
     }
 
     document.querySelectorAll( '.ha-pf-feature-toggle' ).forEach( function ( cb ) {
-        // Apply on load
-        syncPanelVisibility( cb );
-
-        // Apply on change
+        syncToggle( cb );
         cb.addEventListener( 'change', function () {
-            syncPanelVisibility( this );
+            syncToggle( this );
         } );
+    } );
+
+    // -------------------------------------------------------
+    // Colour pickers — live hex label update
+    // -------------------------------------------------------
+    document.querySelectorAll( '.ha-pf-colour-input' ).forEach( function ( input ) {
+        const hexEl = document.getElementById( input.id.replace( 'ha_pf_', 'ha-pf-hex-' ) );
+
+        function updateHex() {
+            if ( hexEl ) hexEl.textContent = input.value.toUpperCase();
+        }
+
+        input.addEventListener( 'input',  updateHex );
+        input.addEventListener( 'change', updateHex );
     } );
 
     // -------------------------------------------------------
@@ -63,15 +78,44 @@
     // -------------------------------------------------------
     document.querySelectorAll( '.ha-pf-colour-reset' ).forEach( function ( btn ) {
         btn.addEventListener( 'click', function () {
-            const input = document.getElementById( this.dataset.target );
-            if ( input ) {
-                input.value = this.dataset.default;
-            }
+            const input  = document.getElementById( this.dataset.target );
+            const hexEl  = document.getElementById( this.dataset.hex );
+            const colour = this.dataset.default;
+
+            if ( input  ) input.value = colour;
+            if ( hexEl  ) hexEl.textContent = colour.toUpperCase();
         } );
     } );
 
     // -------------------------------------------------------
-    // WordPress media uploader for background image
+    // Unsaved-changes dirty badge
+    // -------------------------------------------------------
+    var dirty  = false;
+    var badge  = document.getElementById( 'ha-pf-dirty-badge' );
+    var cfgNote = document.getElementById( 'ha-pf-config-note' );
+
+    function markDirty() {
+        if ( dirty ) return;
+        dirty = true;
+        if ( badge   ) badge.classList.add( 'visible' );
+        if ( cfgNote ) cfgNote.style.display = 'none';
+    }
+
+    document.querySelectorAll( '#ha-pf-form input, #ha-pf-form select, #ha-pf-form textarea' )
+        .forEach( function ( el ) {
+            el.addEventListener( 'change', markDirty );
+            el.addEventListener( 'input',  markDirty );
+        } );
+
+    document.getElementById( 'ha-pf-form' ) &&
+        document.getElementById( 'ha-pf-form' ).addEventListener( 'submit', function () {
+            dirty = false;
+            if ( badge   ) badge.classList.remove( 'visible' );
+            if ( cfgNote ) cfgNote.style.display = '';
+        } );
+
+    // -------------------------------------------------------
+    // WordPress media uploader
     // -------------------------------------------------------
     var mediaFrame;
 
@@ -84,28 +128,32 @@
         }
 
         mediaFrame = wp.media( {
-            title:    'Select or Upload Background Image',
-            button:   { text: 'Use this image' },
-            library:  { type: 'image' },
+            title:   'Select or Upload Background Image',
+            button:  { text: 'Use this image' },
+            library: { type: 'image' },
             multiple: false,
         } );
 
         mediaFrame.on( 'select', function () {
-            const attachment = mediaFrame.state().get( 'selection' ).first().toJSON();
+            var attachment = mediaFrame.state().get( 'selection' ).first().toJSON();
 
-            // Copy image to plugin's upload directory via AJAX
             $.post( haPfAdmin.ajaxUrl, {
                 action:        'ha_pf_copy_image',
                 nonce:         haPfAdmin.copyImageNonce,
                 attachment_id: attachment.id,
             }, function ( response ) {
                 if ( response.success ) {
-                    var newUrl = response.data.url;
-                    $( '#ha_pf_image_url_field' ).val( newUrl );
-                    $( '#ha-pf-image-preview' )
-                        .attr( 'src', newUrl )
-                        .show();
+                    var url = response.data.url;
+                    $( '#ha_pf_image_url_field' ).val( url );
+
+                    var preview = document.getElementById( 'ha-pf-image-preview' );
+                    var wrap    = preview && preview.closest( '.ha-pf-image-preview-wrap' );
+                    if ( preview ) preview.src = url;
+                    if ( wrap    ) wrap.style.display = '';
+
+                    markDirty();
                 } else {
+                    // eslint-disable-next-line no-alert
                     alert( 'Image copy failed: ' + ( response.data || 'Unknown error' ) );
                 }
             } );

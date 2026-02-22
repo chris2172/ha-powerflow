@@ -7,7 +7,6 @@ Requires PHP: 7.4
 Stable tag: 2.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Documents: https://chriswilmot.co.uk/ha-powerflow-document/
 
 A real-time animated power-flow dashboard for WordPress, pulling live data from Home Assistant via a secure server-side proxy.
 

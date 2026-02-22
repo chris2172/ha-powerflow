@@ -62,6 +62,9 @@ $simple_options = [
     'ha_powerflow_ev_flow_forward',
     'ha_powerflow_ev_flow_reverse',
     'ha_powerflow_debug_click',
+    'ha_powerflow_battery_gauge_enable',
+    'ha_powerflow_battery_gauge_x',
+    'ha_powerflow_battery_gauge_y',
 ];
 
 foreach ( $simple_options as $option ) {

@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# WordPress
+*.log
+
+# Editor files
+.vscode/
+.idea/
+*.swp

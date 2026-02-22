@@ -14,7 +14,24 @@ function ha_powerflow_register_settings() {
         'enable_ev',
 
         // Custom image URL
-        'image_url'
+        'image_url',
+
+        // Flow path fields (forward + reverse per flow)
+        'grid_flow_forward',
+        'grid_flow_reverse',
+        'load_flow_forward',
+        'load_flow_reverse',
+        'pv_flow_forward',
+        'pv_flow_reverse',
+        'battery_flow_forward',
+        'battery_flow_reverse',
+        'ev_flow_forward',
+        'ev_flow_reverse',
+
+        // Colour settings
+        'text_colour',
+        'line_colour',
+        'dot_colour',
     ];
 
     // Entities that require rot, x_pos, y_pos
@@ -31,8 +48,9 @@ function ha_powerflow_register_settings() {
         'battery_energy_out',
         'battery_soc',
         'ev_power',
-        'ev_soc'
+        'ev_soc',
     ];
+
 
     // Register base fields
     foreach ($base_fields as $field) {

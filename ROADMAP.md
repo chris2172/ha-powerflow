@@ -79,7 +79,9 @@ These are not scheduled but are under consideration:
 ### **v1.3.0**
 - Powerflow line repositioning editor
 
-### **v2.0.0**
+### **v1.4.0**
 - Full visual editor for complete dashboard layout control
 
+### **v1.5.0**
+- Colour Picker to change colour of Text, Lines & Dots, with Reset to default button
 ---

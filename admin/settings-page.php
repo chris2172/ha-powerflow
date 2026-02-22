@@ -185,10 +185,11 @@ http:
                             <tr>
                                 <th scope="row">HA Token</th>
                                 <td>
-                                    <input type="text"
+                                    <input type="password"
                                         name="ha_powerflow_ha_token"
                                         value="<?php echo esc_attr(get_option('ha_powerflow_ha_token')); ?>"
-                                        style="width:100%; max-width:400px;">
+                                        style="width:100%; max-width:400px;" autocomplete="new-password">
+                                <p class="description">Stored securely. Requests to Home Assistant are made server-side — your token is never sent to the browser.</p>
                                 </td>
                             </tr>
                         </table>
@@ -432,6 +433,113 @@ http:
 
         </div> <!-- END GRID -->
 
+        <!-- SECTION: Flow Fields -->
+        <div class="ha-panel open" id="flow-panel" style="margin-top:20px;">
+            <div class="ha-panel-header">
+                <span>Flow Path Settings</span>
+                <span class="ha-arrow">▼</span>
+            </div>
+
+            <div class="ha-panel-body" id="flow-section">
+                <p style="color:#646970; margin-bottom:15px;">
+                    Override the SVG motion paths for each flow line. Leave blank to use the defaults.<br>
+                    Format: <code>M x y L x y L x y</code> &mdash; must start with <code>M</code> and contain only coordinates and path commands.
+                </p>
+                <table class="form-table">
+                <?php
+                $flow_fields = [
+                    'grid_flow'    => 'Grid Flow',
+                    'load_flow'    => 'Load Flow',
+                    'pv_flow'      => 'PV Flow',
+                    'battery_flow' => 'Battery Flow',
+                    'ev_flow'      => 'EV Flow',
+                ];
+
+                $flow_defaults = [
+                    'grid_flow'    => ['M 787 366 L 805 375 L 633 439', 'M 633 439 L 805 375 L 787 366'],
+                    'load_flow'    => ['M 590 427 L 673 396 L 612 369', 'M 590 427 L 673 396 L 612 369'],
+                    'pv_flow'      => ['M 331 417 L 510 486',            'M 510 486 L 331 417'],
+                    'battery_flow' => ['M 532 500 L 364 563',            'M 364 563 L 532 500'],
+                    'ev_flow'      => ['M 618 497 L 713 532 L 786 499',  'M 786 499 L 713 532 L 618 497'],
+                ];
+
+                foreach ($flow_fields as $key => $label):
+                    $fwd_key = str_replace('_flow', '_flow_forward', $key);
+                    $rev_key = str_replace('_flow', '_flow_reverse', $key);
+                    [$default_fwd, $default_rev] = $flow_defaults[$key];
+                ?>
+                    <tr>
+                        <th scope="row"><?php echo esc_html($label); ?></th>
+                        <td>
+                            <label style="display:block; margin-bottom:6px;">
+                                <span style="display:inline-block; width:70px; font-weight:600;">Forward:</span>
+                                <input type="text"
+                                    name="ha_powerflow_<?php echo esc_attr($fwd_key); ?>"
+                                    value="<?php echo esc_attr(get_option('ha_powerflow_' . $fwd_key)); ?>"
+                                    placeholder="<?php echo esc_attr($default_fwd); ?>"
+                                    style="width:420px; font-family:monospace;">
+                            </label>
+                            <label style="display:block;">
+                                <span style="display:inline-block; width:70px; font-weight:600;">Reverse:</span>
+                                <input type="text"
+                                    name="ha_powerflow_<?php echo esc_attr($rev_key); ?>"
+                                    value="<?php echo esc_attr(get_option('ha_powerflow_' . $rev_key)); ?>"
+                                    placeholder="<?php echo esc_attr($default_rev); ?>"
+                                    style="width:420px; font-family:monospace;">
+                            </label>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECTION: Colour Settings -->
+        <div class="ha-panel open" id="colour-panel" style="margin-top:20px;">
+            <div class="ha-panel-header">
+                <span>Colour Settings</span>
+                <span class="ha-arrow">▼</span>
+            </div>
+
+            <div class="ha-panel-body" id="colour-section">
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="ha_powerflow_text_colour">Text Colour</label></th>
+                        <td style="display:flex; align-items:center; gap:10px;">
+                            <input type="color"
+                                id="ha_powerflow_text_colour"
+                                name="ha_powerflow_text_colour"
+                                value="<?php echo esc_attr(get_option('ha_powerflow_text_colour', '#5EC766')); ?>">
+                            <button type="button" class="button ha-colour-reset" data-target="ha_powerflow_text_colour" data-default="#5EC766">Reset</button>
+                            <span style="color:#646970;">Default: #5EC766</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="ha_powerflow_line_colour">Line Colour</label></th>
+                        <td style="display:flex; align-items:center; gap:10px;">
+                            <input type="color"
+                                id="ha_powerflow_line_colour"
+                                name="ha_powerflow_line_colour"
+                                value="<?php echo esc_attr(get_option('ha_powerflow_line_colour', '#5EC766')); ?>">
+                            <button type="button" class="button ha-colour-reset" data-target="ha_powerflow_line_colour" data-default="#5EC766">Reset</button>
+                            <span style="color:#646970;">Default: #5EC766</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="ha_powerflow_dot_colour">Dot Colour</label></th>
+                        <td style="display:flex; align-items:center; gap:10px;">
+                            <input type="color"
+                                id="ha_powerflow_dot_colour"
+                                name="ha_powerflow_dot_colour"
+                                value="<?php echo esc_attr(get_option('ha_powerflow_dot_colour', '#5EC766')); ?>">
+                            <button type="button" class="button ha-colour-reset" data-target="ha_powerflow_dot_colour" data-default="#5EC766">Reset</button>
+                            <span style="color:#646970;">Default: #5EC766</span>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
         <?php submit_button(); ?>
 
     </form>
@@ -645,6 +753,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.querySelectorAll(".ha-toggle").forEach(cb => {
         cb.addEventListener('change', toggleSections);
+    });
+
+    // Colour reset buttons
+    document.querySelectorAll('.ha-colour-reset').forEach(button => {
+        button.addEventListener('click', function () {
+            const targetId  = this.dataset.target;
+            const defaultVal = this.dataset.default;
+            const input = document.getElementById(targetId);
+            if (input) input.value = defaultVal;
+        });
     });
 
 });

@@ -1307,3 +1307,67 @@
     color: var(--ha-pf-text-muted, #6b7280);
     border: 1px solid var(--ha-pf-border, #dee2e6);
 }
+
+/* ─────────────────────────────────────────────────────
+   Threshold rules
+   ───────────────────────────────────────────────────── */
+
+.ha-pf-threshold-header,
+.ha-pf-threshold-row {
+    display: grid;
+    grid-template-columns: 1fr 110px 90px 50px 36px;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.ha-pf-threshold-header {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--ha-pf-text-muted);
+    letter-spacing: 0.05em;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--ha-pf-border);
+    margin-bottom: 8px;
+}
+
+.ha-pf-threshold-row select,
+.ha-pf-threshold-row input[type="number"] {
+    width: 100%;
+    height: 32px;
+    border: 1px solid var(--ha-pf-border);
+    border-radius: 4px;
+    padding: 0 8px;
+    font-size: 13px;
+    color: var(--ha-pf-text);
+    background: var(--ha-pf-bg);
+}
+
+.ha-pf-threshold-row input[type="color"] {
+    width: 42px;
+    height: 32px;
+    border: 1px solid var(--ha-pf-border);
+    border-radius: 4px;
+    padding: 2px;
+    cursor: pointer;
+    background: var(--ha-pf-bg);
+}
+
+.ha-pf-tr-delete {
+    width: 32px;
+    height: 32px;
+    padding: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ha-pf-text-muted) !important;
+    border-color: var(--ha-pf-border) !important;
+    background: transparent !important;
+    transition: color var(--ha-pf-transition), border-color var(--ha-pf-transition) !important;
+}
+
+.ha-pf-tr-delete:hover {
+    color: #ef4444 !important;
+    border-color: #ef4444 !important;
+}

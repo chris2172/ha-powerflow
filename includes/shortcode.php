@@ -412,6 +412,11 @@ function ha_pf_shortcode() {
         const CUSTOM_UNITS = <?php echo wp_json_encode( $custom_units ); ?>;
         const CUSTOM_SIZES       = <?php echo wp_json_encode( $custom_sizes ); ?>;
         const REFRESH_INTERVAL   = <?php echo (int) max( 5, min( 300, (int) get_option( 'ha_powerflow_refresh_interval', 5 ) ) ); ?>; // seconds
+        const THRESHOLDS         = <?php
+            $raw_thresh = get_option( 'ha_powerflow_thresholds', '[]' );
+            $thresh_arr = json_decode( $raw_thresh ?: '[]', true );
+            echo wp_json_encode( is_array( $thresh_arr ) ? $thresh_arr : [] );
+        ?>;
 
         const PATHS = {
             grid: { fwd: <?php echo wp_json_encode( $paths['grid_fwd'] ); ?>,
@@ -852,6 +857,34 @@ function ha_pf_shortcode() {
                 el.textContent = label + ': ' + (
                     unit === 'w' ? formatPower( data.state ) : data.state + ( displayUnit ? ' ' + displayUnit : '' )
                 );
+
+                // ── Threshold colouring ──────────────────────────────────
+                // Evaluate all rules for this key. Last matching rule wins.
+                // Numeric comparison on the raw state value.
+                ( function applyThresholds() {
+                    var numVal = parseFloat( data.state );
+                    if ( isNaN( numVal ) ) { el.removeAttribute( 'fill' ); return; }
+
+                    var matched = null;
+                    for ( var ti = 0; ti < THRESHOLDS.length; ti++ ) {
+                        var t = THRESHOLDS[ ti ];
+                        if ( t.key !== key ) continue;
+                        var tval = parseFloat( t.value );
+                        var hit  = false;
+                        if      ( t.operator === '<'  ) hit = numVal <  tval;
+                        else if ( t.operator === '<=' ) hit = numVal <= tval;
+                        else if ( t.operator === '>'  ) hit = numVal >  tval;
+                        else if ( t.operator === '>=' ) hit = numVal >= tval;
+                        else if ( t.operator === '==' ) hit = numVal === tval;
+                        if ( hit ) matched = t.colour;
+                    }
+
+                    if ( matched ) {
+                        el.setAttribute( 'fill', matched );
+                    } else {
+                        el.removeAttribute( 'fill' );  // revert to CSS text_colour
+                    }
+                }() );
 
                 const watts = parseFloat( data.state );
                 if ( isNaN( watts ) ) continue;

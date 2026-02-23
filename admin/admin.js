@@ -339,6 +339,254 @@
     }() );
 
     // -------------------------------------------------------
+    // Threshold builder
+    // -------------------------------------------------------
+    ( function () {
+        var list      = document.getElementById( 'ha-pf-thresholds-list' );
+        var jsonField = document.getElementById( 'ha-pf-thresholds-json' );
+        var addBtn    = document.getElementById( 'ha-pf-add-threshold' );
+        var form      = document.getElementById( 'ha-pf-form' );
+
+        if ( ! list || ! jsonField ) return;
+
+        // Build the entity <select> HTML from haPfAdmin data
+        function buildEntityOptions( selectedKey ) {
+            var labels  = haPfAdmin.entityLabels  || {};
+            var customs = haPfAdmin.customEntities || [];
+
+            var groups = {
+                'Grid & Load': [ 'grid_power', 'grid_energy_in', 'grid_energy_out', 'load_power', 'load_energy' ],
+                'Solar':       [ 'pv_power', 'pv_energy' ],
+                'Battery':     [ 'battery_power', 'battery_energy_in', 'battery_energy_out', 'battery_soc' ],
+                'EV':          [ 'ev_power', 'ev_soc' ],
+            };
+
+            var html = '';
+            Object.keys( groups ).forEach( function ( gName ) {
+                html += '<optgroup label="' + gName + '">';
+                groups[ gName ].forEach( function ( k ) {
+                    var sel = ( k === selectedKey ) ? ' selected' : '';
+                    html += '<option value="' + k + '"' + sel + '>' + ( labels[ k ] || k ) + '</option>';
+                } );
+                html += '</optgroup>';
+            } );
+
+            if ( customs.length ) {
+                html += '<optgroup label="Custom">';
+                customs.forEach( function ( ce ) {
+                    var k   = ce.id    || '';
+                    var l   = ce.label || k;
+                    var sel = ( k === selectedKey ) ? ' selected' : '';
+                    html += '<option value="' + k + '"' + sel + '>' + l + '</option>';
+                } );
+                html += '</optgroup>';
+            }
+
+            return html;
+        }
+
+        var operators = [
+            { v: '<',  l: 'is below' },
+            { v: '<=', l: '\u2264' },
+            { v: '>',  l: 'is above' },
+            { v: '>=', l: '\u2265' },
+            { v: '==', l: 'equals' },
+        ];
+
+        function buildOperatorOptions( selectedOp ) {
+            return operators.map( function ( o ) {
+                var sel = ( o.v === selectedOp ) ? ' selected' : '';
+                return '<option value="' + o.v + '"' + sel + '>' + o.l + '</option>';
+            } ).join( '' );
+        }
+
+        function buildRow( data ) {
+            data = data || {};
+            var row = document.createElement( 'div' );
+            row.className = 'ha-pf-threshold-row';
+
+            row.innerHTML =
+                '<select class="tr-key">' + buildEntityOptions( data.key || 'grid_power' ) + '</select>' +
+                '<select class="tr-operator">' + buildOperatorOptions( data.operator || '<' ) + '</select>' +
+                '<input type="number" class="tr-value" step="any" placeholder="0" value="' + ( data.value !== undefined ? data.value : '' ) + '">' +
+                '<input type="color" class="tr-colour" value="' + ( data.colour || '#ef4444' ) + '">' +
+                '<button type="button" class="ha-pf-tr-delete button" aria-label="Remove rule">' +
+                    '<span class="dashicons dashicons-trash"></span></button>';
+
+            wireRow( row );
+            return row;
+        }
+
+        function wireRow( row ) {
+            row.querySelector( '.ha-pf-tr-delete' ).addEventListener( 'click', function () {
+                row.parentNode.removeChild( row );
+                serialise();
+                markDirty();
+            } );
+            row.querySelectorAll( 'select, input' ).forEach( function ( el ) {
+                el.addEventListener( 'change', function () { serialise(); markDirty(); } );
+                el.addEventListener( 'input',  function () { serialise(); markDirty(); } );
+            } );
+        }
+
+        // Wire server-rendered rows
+        list.querySelectorAll( '.ha-pf-threshold-row' ).forEach( wireRow );
+
+        if ( addBtn ) {
+            addBtn.addEventListener( 'click', function () {
+                var row = buildRow( {} );
+                list.appendChild( row );
+                row.querySelector( '.tr-value' ).focus();
+                serialise();
+                markDirty();
+            } );
+        }
+
+        function serialise() {
+            var items = [];
+            list.querySelectorAll( '.ha-pf-threshold-row' ).forEach( function ( row ) {
+                var key    = ( row.querySelector( '.tr-key'      ) || {} ).value || '';
+                var op     = ( row.querySelector( '.tr-operator' ) || {} ).value || '<';
+                var val    = parseFloat( ( row.querySelector( '.tr-value'  ) || {} ).value );
+                var colour = ( row.querySelector( '.tr-colour'   ) || {} ).value || '#ef4444';
+                if ( ! key ) return;
+                items.push( { key: key, operator: op, value: isNaN( val ) ? 0 : val, colour: colour } );
+            } );
+            jsonField.value = JSON.stringify( items );
+        }
+
+        // Serialise once on page load so the field is consistent
+        serialise();
+
+        if ( form ) {
+            form.addEventListener( 'submit', serialise );
+        }
+    }() );
+
+    // -------------------------------------------------------
+    // Server snapshot restore
+    // -------------------------------------------------------
+    ( function () {
+        var select     = document.getElementById( 'ha-pf-snapshot-select' );
+        var restoreBtn = document.getElementById( 'ha-pf-snapshot-restore-btn' );
+        var statusEl   = document.getElementById( 'ha-pf-snapshot-status' );
+
+        // Re-use the existing restore modal infrastructure
+        var overlay    = document.getElementById( 'ha-pf-restore-overlay' );
+        var confirmBtn = document.getElementById( 'ha-pf-restore-confirm' );
+        var cancelBtn  = document.getElementById( 'ha-pf-restore-cancel' );
+        var filenameEl = document.getElementById( 'ha-pf-restore-filename' );
+        var confirmText = confirmBtn ? confirmBtn.querySelector( '.ha-pf-restore-confirm-text' ) : null;
+        var confirmIcon = confirmBtn ? confirmBtn.querySelector( '.ha-pf-restore-confirm-icon' ) : null;
+        var spinner     = confirmBtn ? confirmBtn.querySelector( '.ha-pf-restore-spinner' )      : null;
+
+        if ( ! select || ! restoreBtn ) return;
+
+        // ── Load snapshot list ────────────────────────────────────────
+        var fd = new FormData();
+        fd.append( 'action', 'ha_pf_list_snapshots' );
+        fd.append( 'nonce',  haPfAdmin.listSnapshotsNonce );
+
+        fetch( haPfAdmin.ajaxUrl, { method: 'POST', body: fd } )
+            .then( function ( r ) { return r.json(); } )
+            .then( function ( data ) {
+                select.innerHTML = '';
+
+                if ( ! data.success || ! data.data.snapshots.length ) {
+                    var opt = document.createElement( 'option' );
+                    opt.value   = '';
+                    opt.textContent = data.success ? 'No snapshots found' : 'Failed to load snapshots';
+                    select.appendChild( opt );
+                    if ( statusEl ) statusEl.textContent = 'Snapshots are created automatically every time you save settings.';
+                    return;
+                }
+
+                data.data.snapshots.forEach( function ( snap, i ) {
+                    var opt = document.createElement( 'option' );
+                    opt.value       = snap.filename;
+                    opt.textContent = snap.label + ( i === 0 ? '  (latest)' : '' );
+                    select.appendChild( opt );
+                } );
+
+                restoreBtn.disabled = false;
+                if ( statusEl ) statusEl.textContent = data.data.snapshots.length + ' snapshot' + ( data.data.snapshots.length === 1 ? '' : 's' ) + ' available';
+            } )
+            .catch( function () {
+                select.innerHTML = '<option value="">Error loading snapshots</option>';
+            } );
+
+        // ── Restore button — show the shared confirm modal ────────────
+        restoreBtn.addEventListener( 'click', function () {
+            var filename = select.value;
+            if ( ! filename || ! overlay ) return;
+
+            if ( filenameEl ) filenameEl.textContent = filename;
+            if ( confirmText ) confirmText.textContent = 'Yes, Restore Settings';
+            if ( confirmIcon ) confirmIcon.className = 'dashicons dashicons-yes-alt ha-pf-restore-confirm-icon';
+
+            clearError();
+            overlay.setAttribute( 'aria-hidden', 'false' );
+            overlay.classList.add( 'is-visible' );
+            if ( cancelBtn ) cancelBtn.focus();
+
+            // Swap the confirm handler for snapshot restore
+            if ( confirmBtn ) {
+                confirmBtn.onclick = function () {
+                    setLoading( true );
+
+                    var sfd = new FormData();
+                    sfd.append( 'action',   'ha_pf_restore_snapshot' );
+                    sfd.append( 'nonce',    haPfAdmin.restoreSnapshotNonce );
+                    sfd.append( 'filename', filename );
+
+                    fetch( haPfAdmin.ajaxUrl, { method: 'POST', body: sfd } )
+                        .then( function ( r ) { return r.json(); } )
+                        .then( function ( data ) {
+                            if ( data.success ) {
+                                if ( confirmText ) confirmText.textContent = 'Restored! Reloading\u2026';
+                                setTimeout( function () { window.location.reload(); }, 900 );
+                            } else {
+                                var msg = ( data.data && data.data.message ) ? data.data.message : 'Restore failed.';
+                                setLoading( false );
+                                showError( msg );
+                            }
+                        } )
+                        .catch( function ( err ) {
+                            setLoading( false );
+                            showError( 'Network error: ' + err.message );
+                        } );
+                };
+            }
+        } );
+
+        cancelBtn && cancelBtn.addEventListener( 'click', function () {
+            if ( confirmBtn ) confirmBtn.onclick = null;  // clear snapshot handler; file-restore handler re-sets its own
+        } );
+
+        function setLoading( on ) {
+            if ( ! confirmBtn ) return;
+            confirmBtn.disabled = on;
+            if ( cancelBtn ) cancelBtn.disabled = on;
+            if ( spinner ) spinner.style.display = on ? 'inline-block' : 'none';
+            if ( confirmIcon ) confirmIcon.style.display = on ? 'none' : '';
+        }
+
+        function showError( msg ) {
+            clearError();
+            var el = document.createElement( 'p' );
+            el.className = 'ha-pf-modal-error';
+            el.textContent = msg;
+            var actions = overlay && overlay.querySelector( '.ha-pf-modal-actions' );
+            if ( actions ) actions.parentNode.insertBefore( el, actions );
+        }
+
+        function clearError() {
+            var existing = overlay && overlay.querySelector( '.ha-pf-modal-error' );
+            if ( existing ) existing.remove();
+        }
+    }() );
+
+    // -------------------------------------------------------
     // Config restore: file picker → confirmation modal → AJAX
     // -------------------------------------------------------
     ( function () {

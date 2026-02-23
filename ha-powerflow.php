@@ -87,10 +87,28 @@ function ha_pf_admin_enqueue( $hook ) {
     );
     // Pass the nonce for the image-copy AJAX call to JS
     wp_localize_script( 'ha-pf-admin', 'haPfAdmin', [
-        'ajaxUrl'             => admin_url( 'admin-ajax.php' ),
-        'copyImageNonce'      => wp_create_nonce( 'ha_pf_copy_image' ),
-        'importNonce'         => wp_create_nonce( 'ha_pf_import_config' ),
-        'testConnectionNonce' => wp_create_nonce( 'ha_pf_test_connection' ),
+        'ajaxUrl'              => admin_url( 'admin-ajax.php' ),
+        'copyImageNonce'       => wp_create_nonce( 'ha_pf_copy_image' ),
+        'importNonce'          => wp_create_nonce( 'ha_pf_import_config' ),
+        'testConnectionNonce'  => wp_create_nonce( 'ha_pf_test_connection' ),
+        'listSnapshotsNonce'   => wp_create_nonce( 'ha_pf_list_snapshots' ),
+        'restoreSnapshotNonce' => wp_create_nonce( 'ha_pf_restore_snapshot' ),
+        'entityLabels'         => [
+            'grid_power'         => 'Grid Power',
+            'grid_energy_in'     => 'Grid Energy In',
+            'grid_energy_out'    => 'Grid Energy Out',
+            'load_power'         => 'Load Power',
+            'load_energy'        => 'Load Energy',
+            'pv_power'           => 'Solar Power',
+            'pv_energy'          => 'Solar Energy',
+            'battery_power'      => 'Battery Power',
+            'battery_energy_in'  => 'Battery In',
+            'battery_energy_out' => 'Battery Out',
+            'battery_soc'        => 'Battery SOC',
+            'ev_power'           => 'EV Power',
+            'ev_soc'             => 'EV SOC',
+        ],
+        'customEntities' => json_decode( get_option( 'ha_powerflow_custom_entities', '[]' ) ?: '[]', true ) ?: [],
     ] );
 }
 

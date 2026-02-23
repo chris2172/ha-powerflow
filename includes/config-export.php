@@ -251,6 +251,24 @@ function ha_pf_build_yaml() {
         }
     }
 
+    // ---- thresholds ----------------------------------
+    $threshold_raw  = get_option( 'ha_powerflow_thresholds', '[]' );
+    $threshold_list = json_decode( $threshold_raw ?: '[]', true );
+    if ( ! is_array( $threshold_list ) ) $threshold_list = [];
+
+    $lines[] = '';
+    $lines[] = 'thresholds:';
+    if ( empty( $threshold_list ) ) {
+        $lines[] = '  []';
+    } else {
+        foreach ( $threshold_list as $item ) {
+            $lines[] = '  - key: '      . ha_pf_yaml_scalar( $item['key']      ?? '' );
+            $lines[] = '    operator: ' . ha_pf_yaml_scalar( $item['operator'] ?? '<' );
+            $lines[] = '    value: '    . floatval( $item['value'] ?? 0 );
+            $lines[] = '    colour: '   . ha_pf_yaml_scalar( $item['colour']   ?? '#ef4444' );
+        }
+    }
+
     return implode( "\n", $lines ) . "\n";
 }
 
@@ -457,7 +475,110 @@ function ha_pf_import_config( $yaml_string ) {
         update_option( 'ha_powerflow_custom_entities', wp_json_encode( $items ) );
     }
 
+    // Thresholds
+    if ( isset( $data['thresholds'] ) && is_array( $data['thresholds'] ) ) {
+        $valid_ops = [ '<', '<=', '>', '>=', '==' ];
+        $thresh    = [];
+        foreach ( $data['thresholds'] as $item ) {
+            if ( ! is_array( $item ) ) continue;
+            $key    = sanitize_key( $item['key'] ?? '' );
+            $op     = in_array( $item['operator'] ?? '', $valid_ops, true ) ? $item['operator'] : '<';
+            $val    = floatval( $item['value'] ?? 0 );
+            $colour = sanitize_hex_color( $item['colour'] ?? '' ) ?: '#ef4444';
+            if ( $key === '' ) continue;
+            $thresh[] = [ 'key' => $key, 'operator' => $op, 'value' => $val, 'colour' => $colour ];
+        }
+        update_option( 'ha_powerflow_thresholds', wp_json_encode( $thresh ) );
+    }
+
     return true;
+}
+
+// -------------------------------------------------------
+// AJAX: list server-side config snapshots (admin only)
+// -------------------------------------------------------
+add_action( 'wp_ajax_ha_pf_list_snapshots', 'ha_pf_ajax_list_snapshots' );
+
+function ha_pf_ajax_list_snapshots() {
+    if ( ! check_ajax_referer( 'ha_pf_list_snapshots', 'nonce', false ) ) {
+        wp_send_json_error( [ 'message' => 'Invalid security token.' ] );
+    }
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( [ 'message' => 'Insufficient permissions.' ] );
+    }
+
+    $upload     = wp_upload_dir();
+    $config_dir = $upload['basedir'] . '/ha-powerflow/config';
+    $pattern    = $config_dir . '/*-config.yaml';
+    $files      = glob( $pattern );
+
+    if ( ! $files ) {
+        wp_send_json_success( [ 'snapshots' => [] ] );
+    }
+
+    rsort( $files );   // newest first
+
+    $snapshots = [];
+    foreach ( $files as $path ) {
+        $name = basename( $path );
+        // Parse YYMMDD-hhmmss from filename for a readable label
+        if ( preg_match( '/^(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-config\.yaml$/', $name, $m ) ) {
+            $label = '20' . $m[1] . '-' . $m[2] . '-' . $m[3] . '  ' . $m[4] . ':' . $m[5] . ':' . $m[6];
+        } else {
+            $label = $name;
+        }
+        $snapshots[] = [ 'filename' => $name, 'label' => $label ];
+    }
+
+    wp_send_json_success( [ 'snapshots' => $snapshots ] );
+}
+
+// -------------------------------------------------------
+// AJAX: restore a specific server-side config snapshot
+// -------------------------------------------------------
+add_action( 'wp_ajax_ha_pf_restore_snapshot', 'ha_pf_ajax_restore_snapshot' );
+
+function ha_pf_ajax_restore_snapshot() {
+    if ( ! check_ajax_referer( 'ha_pf_restore_snapshot', 'nonce', false ) ) {
+        wp_send_json_error( [ 'message' => 'Invalid security token.' ] );
+    }
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( [ 'message' => 'Insufficient permissions.' ] );
+    }
+
+    $filename = isset( $_POST['filename'] ) ? sanitize_file_name( wp_unslash( $_POST['filename'] ) ) : '';
+
+    // Strict whitelist: only our own snapshot filenames (YYMMDD-hhmmss-config.yaml)
+    if ( ! preg_match( '/^\d{6}-\d{6}-config\.yaml$/', $filename ) ) {
+        wp_send_json_error( [ 'message' => 'Invalid snapshot filename.' ] );
+    }
+
+    $upload     = wp_upload_dir();
+    $config_dir = $upload['basedir'] . '/ha-powerflow/config';
+    $filepath   = $config_dir . '/' . $filename;
+
+    // Path-traversal guard: realpath must start with realpath($config_dir)
+    $real_dir  = realpath( $config_dir );
+    $real_file = realpath( $filepath );
+
+    if ( ! $real_dir || ! $real_file || strpos( $real_file, $real_dir . DIRECTORY_SEPARATOR ) !== 0 ) {
+        wp_send_json_error( [ 'message' => 'Snapshot file not found.' ] );
+    }
+
+    $yaml = file_get_contents( $real_file );
+    if ( $yaml === false ) {
+        wp_send_json_error( [ 'message' => 'Could not read snapshot file.' ] );
+    }
+
+    // Snapshot the current settings before overwriting
+    ha_pf_write_config_snapshot();
+
+    $result = ha_pf_import_config( $yaml );
+    if ( is_wp_error( $result ) ) {
+        wp_send_json_error( [ 'message' => $result->get_error_message() ] );
+    }
+
+    wp_send_json_success( [ 'message' => 'Settings restored from ' . $filename ] );
 }
 
 // -------------------------------------------------------

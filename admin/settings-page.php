@@ -524,6 +524,129 @@ function ha_pf_settings_page() {
             </div>
 
             <!-- ══════════════════════════════════════════
+                 THRESHOLDS
+                 ══════════════════════════════════════════ -->
+            <p class="ha-pf-section-label"><?php esc_html_e( 'Thresholds', 'ha-powerflow' ); ?></p>
+
+            <div class="ha-pf-panel open" id="ha-pf-panel-thresholds">
+                <div class="ha-pf-panel-header">
+                    <div class="ha-pf-panel-header-left">
+                        <div class="ha-pf-panel-header-icon">
+                            <span class="dashicons dashicons-flag"></span>
+                        </div>
+                        <?php esc_html_e( 'Label Colour Thresholds', 'ha-powerflow' ); ?>
+                    </div>
+                    <span class="ha-pf-arrow">&#9660;</span>
+                </div>
+                <div class="ha-pf-panel-body">
+
+                    <p class="description" style="margin-bottom:16px;">
+                        <?php esc_html_e( 'Change a label\'s colour when its value crosses a threshold. Rules are evaluated every refresh cycle — the last matching rule wins.', 'ha-powerflow' ); ?>
+                    </p>
+
+                    <input type="hidden"
+                           name="ha_powerflow_thresholds"
+                           id="ha-pf-thresholds-json"
+                           value="<?php echo esc_attr( get_option( 'ha_powerflow_thresholds', '[]' ) ); ?>">
+
+                    <div class="ha-pf-threshold-header">
+                        <span><?php esc_html_e( 'Entity', 'ha-powerflow' ); ?></span>
+                        <span><?php esc_html_e( 'When', 'ha-powerflow' ); ?></span>
+                        <span><?php esc_html_e( 'Value', 'ha-powerflow' ); ?></span>
+                        <span><?php esc_html_e( 'Colour', 'ha-powerflow' ); ?></span>
+                        <span></span>
+                    </div>
+
+                    <div id="ha-pf-thresholds-list">
+                        <?php
+                        // Build entity options for PHP-rendered rows
+                        $saved_custom_for_thresh = json_decode( get_option( 'ha_powerflow_custom_entities', '[]' ) ?: '[]', true );
+                        if ( ! is_array( $saved_custom_for_thresh ) ) $saved_custom_for_thresh = [];
+
+                        $builtin_groups = [
+                            'Grid & Load' => [
+                                'grid_power'         => 'Grid Power',
+                                'grid_energy_in'     => 'Grid Energy In',
+                                'grid_energy_out'    => 'Grid Energy Out',
+                                'load_power'         => 'Load Power',
+                                'load_energy'        => 'Load Energy',
+                            ],
+                            'Solar' => [
+                                'pv_power'  => 'Solar Power',
+                                'pv_energy' => 'Solar Energy',
+                            ],
+                            'Battery' => [
+                                'battery_power'       => 'Battery Power',
+                                'battery_energy_in'   => 'Battery In',
+                                'battery_energy_out'  => 'Battery Out',
+                                'battery_soc'         => 'Battery SOC',
+                            ],
+                            'EV' => [
+                                'ev_power' => 'EV Power',
+                                'ev_soc'   => 'EV SOC',
+                            ],
+                        ];
+
+                        // Build the <select> options HTML (reused by PHP rows; JS uses haPfAdmin.entityLabels)
+                        function ha_pf_threshold_entity_options( $selected_key, $builtin_groups, $custom_entities ) {
+                            $html = '';
+                            foreach ( $builtin_groups as $group_label => $keys ) {
+                                $html .= '<optgroup label="' . esc_attr( $group_label ) . '">';
+                                foreach ( $keys as $k => $l ) {
+                                    $html .= '<option value="' . esc_attr( $k ) . '"' . selected( $selected_key, $k, false ) . '>' . esc_html( $l ) . '</option>';
+                                }
+                                $html .= '</optgroup>';
+                            }
+                            if ( ! empty( $custom_entities ) ) {
+                                $html .= '<optgroup label="Custom">';
+                                foreach ( $custom_entities as $ce ) {
+                                    $k    = $ce['id']    ?? '';
+                                    $l    = $ce['label'] ?? $k;
+                                    $html .= '<option value="' . esc_attr( $k ) . '"' . selected( $selected_key, $k, false ) . '>' . esc_html( $l ) . '</option>';
+                                }
+                                $html .= '</optgroup>';
+                            }
+                            return $html;
+                        }
+
+                        $saved_thresholds = json_decode( get_option( 'ha_powerflow_thresholds', '[]' ) ?: '[]', true );
+                        if ( is_array( $saved_thresholds ) ) :
+                            foreach ( $saved_thresholds as $tr ) :
+                                $tr_key    = $tr['key']      ?? 'grid_power';
+                                $tr_op     = $tr['operator'] ?? '<';
+                                $tr_val    = $tr['value']    ?? 0;
+                                $tr_colour = $tr['colour']   ?? '#ef4444';
+                        ?>
+                        <div class="ha-pf-threshold-row">
+                            <select class="tr-key">
+                                <?php echo ha_pf_threshold_entity_options( $tr_key, $builtin_groups, $saved_custom_for_thresh ); ?>
+                            </select>
+                            <select class="tr-operator">
+                                <?php foreach ( [ '<' => 'is below', '<=' => '≤', '>' => 'is above', '>=' => '≥', '==' => 'equals' ] as $op => $ol ) : ?>
+                                <option value="<?php echo esc_attr( $op ); ?>" <?php selected( $tr_op, $op ); ?>><?php echo esc_html( $ol ); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <input type="number" class="tr-value" step="any"
+                                   value="<?php echo esc_attr( $tr_val ); ?>"
+                                   placeholder="0">
+                            <input type="color" class="tr-colour"
+                                   value="<?php echo esc_attr( $tr_colour ); ?>">
+                            <button type="button" class="ha-pf-tr-delete button" aria-label="<?php esc_attr_e( 'Remove rule', 'ha-powerflow' ); ?>">
+                                <span class="dashicons dashicons-trash"></span>
+                            </button>
+                        </div>
+                        <?php endforeach; endif; ?>
+                    </div>
+
+                    <button type="button" id="ha-pf-add-threshold" class="button" style="margin-top:12px;">
+                        <span class="dashicons dashicons-plus" style="margin-top:3px;"></span>
+                        <?php esc_html_e( 'Add Rule', 'ha-powerflow' ); ?>
+                    </button>
+
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════
                  APPEARANCE
                  ══════════════════════════════════════════ -->
             <p class="ha-pf-section-label"><?php esc_html_e( 'Appearance', 'ha-powerflow' ); ?></p>
@@ -668,6 +791,29 @@ function ha_pf_settings_page() {
                 </div>
 
             </div><!-- /advanced grid -->
+
+            <!-- Server Snapshots — full-width below the card grid -->
+            <div class="ha-pf-card" id="ha-pf-card-snapshots" style="margin-top:16px;">
+                <div class="ha-pf-card-header">
+                    <span class="dashicons dashicons-backup"></span>
+                    <?php esc_html_e( 'Restore from Server Snapshot', 'ha-powerflow' ); ?>
+                </div>
+                <div class="ha-pf-card-body">
+                    <p class="description" style="margin-bottom:12px;">
+                        <?php esc_html_e( 'Select a backup snapshot saved automatically by the plugin and restore it directly — no file download required.', 'ha-powerflow' ); ?>
+                    </p>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                        <select id="ha-pf-snapshot-select" style="min-width:260px;">
+                            <option value=""><?php esc_html_e( 'Loading snapshots\u2026', 'ha-powerflow' ); ?></option>
+                        </select>
+                        <button type="button" id="ha-pf-snapshot-restore-btn" class="button" disabled>
+                            <span class="dashicons dashicons-image-rotate" style="margin-top:3px;margin-right:2px;"></span>
+                            <?php esc_html_e( 'Restore Selected', 'ha-powerflow' ); ?>
+                        </button>
+                        <span id="ha-pf-snapshot-status" style="font-size:13px;color:#6b7280;"></span>
+                    </div>
+                </div>
+            </div>
 
             <!-- ══════════════════════════════════════════
                  STICKY SAVE BAR (inside the form so Save works)

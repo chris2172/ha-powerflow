@@ -22,6 +22,13 @@ function ha_pf_register_settings() {
     register_setting( $group, 'ha_powerflow_ha_token', [ 'sanitize_callback' => 'sanitize_text_field' ] );
 
     // --------------------------------------------------
+    // Thresholds (stored as a JSON blob, same pattern as custom_entities)
+    // --------------------------------------------------
+    register_setting( $group, 'ha_powerflow_thresholds', [
+        'sanitize_callback' => 'ha_pf_sanitize_thresholds',
+    ] );
+
+    // --------------------------------------------------
     // Refresh interval (seconds, 5–300, default 5)
     // --------------------------------------------------
     register_setting( $group, 'ha_powerflow_refresh_interval', [
@@ -155,6 +162,33 @@ function ha_pf_register_settings() {
 /** Checkbox: returns '1' if checked, '0' otherwise. */
 function ha_pf_sanitize_checkbox( $val ) {
     return ( $val === '1' || $val === 1 || $val === true ) ? '1' : '0';
+}
+
+/**
+ * Thresholds: JSON array of {key, operator, value, colour}.
+ * Returns a clean JSON string or '[]'.
+ */
+function ha_pf_sanitize_thresholds( $raw ) {
+    $list = json_decode( wp_unslash( $raw ), true );
+    if ( ! is_array( $list ) ) return '[]';
+
+    $valid_ops = [ '<', '<=', '>', '>=', '==' ];
+    $out       = [];
+
+    foreach ( $list as $item ) {
+        if ( ! is_array( $item ) ) continue;
+
+        $key    = sanitize_key( $item['key'] ?? '' );
+        $op     = in_array( $item['operator'] ?? '', $valid_ops, true )
+                    ? $item['operator'] : '<';
+        $val    = floatval( $item['value'] ?? 0 );
+        $colour = sanitize_hex_color( $item['colour'] ?? '' ) ?: '#ef4444';
+
+        if ( empty( $key ) ) continue;
+        $out[] = [ 'key' => $key, 'operator' => $op, 'value' => $val, 'colour' => $colour ];
+    }
+
+    return wp_json_encode( $out );
 }
 
 /** Hex colour: validates format and returns default green if invalid. */

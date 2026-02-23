@@ -407,6 +407,88 @@ function ha_pf_settings_page() {
             </div><!-- /grid -->
 
             <!-- ══════════════════════════════════════════
+                 CUSTOM ENTITIES
+                 ══════════════════════════════════════════ -->
+            <p class="ha-pf-section-label"><?php esc_html_e( 'Custom Entities', 'ha-powerflow' ); ?></p>
+
+            <div class="ha-pf-panel open" id="ha-pf-panel-custom-entities">
+                <div class="ha-pf-panel-header">
+                    <div class="ha-pf-panel-header-left">
+                        <div class="ha-pf-panel-header-icon">
+                            <span class="dashicons dashicons-plus-alt"></span>
+                        </div>
+                        <?php esc_html_e( 'Custom Entity Labels', 'ha-powerflow' ); ?>
+                    </div>
+                    <span class="ha-pf-arrow">&#9660;</span>
+                </div>
+                <div class="ha-pf-panel-body">
+
+                    <p class="description" style="margin-bottom:16px;">
+                        <?php esc_html_e( 'Add any Home Assistant entity to the dashboard with a custom display name and position. Each entry is fetched and displayed as a text label on the SVG.', 'ha-powerflow' ); ?>
+                    </p>
+
+                    <!-- Hidden field — JS serialises the list into this before submit -->
+                    <input type="hidden"
+                           name="ha_powerflow_custom_entities"
+                           id="ha-pf-custom-entities-json"
+                           value="<?php echo esc_attr( get_option( 'ha_powerflow_custom_entities', '[]' ) ); ?>">
+
+                    <!-- Column headers -->
+                    <div class="ha-pf-custom-entity-header">
+                        <span><?php esc_html_e( 'Display Name', 'ha-powerflow' ); ?></span>
+                        <span><?php esc_html_e( 'Entity ID', 'ha-powerflow' ); ?></span>
+                        <span><?php esc_html_e( 'Unit', 'ha-powerflow' ); ?></span>
+                        <span><?php esc_html_e( 'Size', 'ha-powerflow' ); ?></span>
+                        <span><?php esc_html_e( 'Rot', 'ha-powerflow' ); ?></span>
+                        <span>X</span>
+                        <span>Y</span>
+                        <span><?php esc_html_e( 'Visible', 'ha-powerflow' ); ?></span>
+                        <span></span><!-- delete button column -->
+                    </div>
+
+                    <!-- Existing rows rendered from saved data -->
+                    <div id="ha-pf-custom-entities-list">
+                        <?php
+                        $saved_custom = json_decode( get_option( 'ha_powerflow_custom_entities', '[]' ) ?: '[]', true );
+                        if ( is_array( $saved_custom ) ) {
+                            foreach ( $saved_custom as $item ) :
+                                $cid     = esc_attr( $item['id']        ?? '' );
+                                $clabel  = esc_attr( $item['label']     ?? '' );
+                                $centity = esc_attr( $item['entity_id'] ?? '' );
+                                $cunit   = esc_attr( $item['unit']       ?? '' );
+                                $csize   = esc_attr( $item['size']      ?? 14 );
+                                $crot    = esc_attr( $item['rot']       ?? 0 );
+                                $cx      = esc_attr( $item['x']         ?? 0 );
+                                $cy      = esc_attr( $item['y']         ?? 0 );
+                                $cvis    = ! empty( $item['visible'] );
+                        ?>
+                        <div class="ha-pf-custom-entity-row" data-id="<?php echo $cid; ?>">
+                            <input type="text"   class="ce-label"     placeholder="<?php esc_attr_e( 'Solar kWh', 'ha-powerflow' ); ?>" value="<?php echo $clabel; ?>">
+                            <input type="text"   class="ce-entity-id" placeholder="sensor.solar_energy" value="<?php echo $centity; ?>">
+                            <input type="text"   class="ce-unit"      placeholder="kWh" value="<?php echo $cunit; ?>" style="width:60px;">
+                            <input type="number" class="ce-size"      placeholder="14"  value="<?php echo $csize; ?>" style="width:52px;" min="6" max="72">
+                            <input type="number" class="ce-rot"       placeholder="0"   value="<?php echo $crot; ?>" style="width:56px;">
+                            <input type="number" class="ce-x"         placeholder="0"   value="<?php echo $cx; ?>"   style="width:70px;" min="0">
+                            <input type="number" class="ce-y"         placeholder="0"   value="<?php echo $cy; ?>"   style="width:70px;" min="0">
+                            <label class="ha-pf-ce-visible">
+                                <input type="checkbox" class="ce-visible" <?php checked( $cvis ); ?>>
+                            </label>
+                            <button type="button" class="ha-pf-ce-delete button" aria-label="<?php esc_attr_e( 'Remove row', 'ha-powerflow' ); ?>">
+                                <span class="dashicons dashicons-trash"></span>
+                            </button>
+                        </div>
+                        <?php endforeach; } ?>
+                    </div>
+
+                    <button type="button" id="ha-pf-add-custom-entity" class="button" style="margin-top:12px;">
+                        <span class="dashicons dashicons-plus" style="margin-top:3px;"></span>
+                        <?php esc_html_e( 'Add Entity', 'ha-powerflow' ); ?>
+                    </button>
+
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════
                  APPEARANCE
                  ══════════════════════════════════════════ -->
             <p class="ha-pf-section-label"><?php esc_html_e( 'Appearance', 'ha-powerflow' ); ?></p>

@@ -75,6 +75,124 @@
     syncGridExport();
 
     // -------------------------------------------------------
+    // Custom entity builder
+    // -------------------------------------------------------
+    ( function () {
+        var list      = document.getElementById( 'ha-pf-custom-entities-list' );
+        var jsonField = document.getElementById( 'ha-pf-custom-entities-json' );
+        var addBtn    = document.getElementById( 'ha-pf-add-custom-entity' );
+        var form      = document.getElementById( 'ha-pf-form' );
+
+        if ( ! list || ! jsonField ) return;
+
+        // Generate a slug id from label text, unique enough for our purposes
+        function makeId( label ) {
+            var base = 'custom_' + ( label || '' )
+                .toLowerCase()
+                .replace( /[^a-z0-9]+/g, '_' )
+                .replace( /^_|_$/, '' )
+                .substring( 0, 28 );
+            return base || ( 'custom_' + Date.now() );
+        }
+
+        // Build and return one row <div> from a data object
+        function buildRow( data ) {
+            data = data || {};
+            var row  = document.createElement( 'div' );
+            row.className  = 'ha-pf-custom-entity-row';
+            row.dataset.id = data.id || '';
+
+            function inp( cls, type, ph, val, extra ) {
+                var s = '<input type="' + type + '" class="' + cls + '" placeholder="' + ph + '" value="' +
+                        String( val || '' ).replace( /"/g, '&quot;' ) + '"' + ( extra || '' ) + '>';
+                return s;
+            }
+
+            row.innerHTML =
+                inp( 'ce-label',     'text',   'Solar kWh',          data.label     || '' ) +
+                inp( 'ce-entity-id', 'text',   'sensor.solar_energy', data.entity_id || '' ) +
+                inp( 'ce-unit',      'text',   'kWh',                data.unit      || '', ' style="width:60px;"' ) +
+                inp( 'ce-size',      'number', '14',                 data.size      || 14, ' style="width:52px;" min="6" max="72"' ) +
+                inp( 'ce-rot',       'number', '0',                  data.rot       || 0,  ' style="width:56px;"' ) +
+                inp( 'ce-x',         'number', '0',                  data.x         || 0,  ' style="width:70px;" min="0"' ) +
+                inp( 'ce-y',         'number', '0',                  data.y         || 0,  ' style="width:70px;" min="0"' ) +
+                '<label class="ha-pf-ce-visible"><input type="checkbox" class="ce-visible"' +
+                    ( data.visible ? ' checked' : '' ) + '></label>' +
+                '<button type="button" class="ha-pf-ce-delete button" aria-label="Remove row">' +
+                    '<span class="dashicons dashicons-trash"></span></button>';
+
+            // Delete button
+            row.querySelector( '.ha-pf-ce-delete' ).addEventListener( 'click', function () {
+                row.parentNode.removeChild( row );
+                serialise();
+                markDirty();
+            } );
+
+            // Any change marks dirty
+            row.querySelectorAll( 'input' ).forEach( function ( el ) {
+                el.addEventListener( 'change', markDirty );
+                el.addEventListener( 'input',  markDirty );
+            } );
+
+            return row;
+        }
+
+        // Attach delete listeners to rows that were server-rendered
+        list.querySelectorAll( '.ha-pf-custom-entity-row' ).forEach( function ( row ) {
+            row.querySelector( '.ha-pf-ce-delete' ).addEventListener( 'click', function () {
+                row.parentNode.removeChild( row );
+                serialise();
+                markDirty();
+            } );
+        } );
+
+        // Add button
+        if ( addBtn ) {
+            addBtn.addEventListener( 'click', function () {
+                var row = buildRow( {} );
+                list.appendChild( row );
+                row.querySelector( '.ce-label' ).focus();
+                serialise();
+                markDirty();
+            } );
+        }
+
+        // Collect all rows into the hidden JSON field before the form submits
+        function serialise() {
+            var items = [];
+            list.querySelectorAll( '.ha-pf-custom-entity-row' ).forEach( function ( row ) {
+                var label = ( row.querySelector( '.ce-label'     ) || {} ).value || '';
+                var id    = row.dataset.id || makeId( label );
+                if ( ! id ) return;
+                items.push( {
+                    id:        id,
+                    label:     label,
+                    entity_id: ( row.querySelector( '.ce-entity-id' ) || {} ).value || '',
+                    unit:      ( row.querySelector( '.ce-unit'      ) || {} ).value || '',
+                    size:      parseInt( ( row.querySelector( '.ce-size' ) || {} ).value || '14', 10 ),
+                    rot:       parseInt( ( row.querySelector( '.ce-rot' ) || {} ).value || '0', 10 ),
+                    x:         parseInt( ( row.querySelector( '.ce-x'   ) || {} ).value || '0', 10 ),
+                    y:         parseInt( ( row.querySelector( '.ce-y'   ) || {} ).value || '0', 10 ),
+                    visible:   !! ( row.querySelector( '.ce-visible' ) || {} ).checked,
+                } );
+            } );
+            jsonField.value = JSON.stringify( items );
+        }
+
+        // Serialise on submit (catches any last-second edits)
+        if ( form ) {
+            form.addEventListener( 'submit', function () {
+                serialise();
+            } );
+        }
+
+        // Serialise on any change inside the list
+        list.addEventListener( 'change', serialise );
+        list.addEventListener( 'input',  serialise );
+
+    }() );
+
+    // -------------------------------------------------------
     // Colour pickers — live hex label update
     // -------------------------------------------------------
     document.querySelectorAll( '.ha-pf-colour-input' ).forEach( function ( input ) {

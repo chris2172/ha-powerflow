@@ -226,6 +226,29 @@ function ha_pf_build_yaml() {
     $lines[] = '  enable: ' . ( $opt( 'ev_gauge_enable' ) === '1' ? 'true' : 'false' );
     $lines[] = '  x: '     . absint( $opt( 'ev_gauge_x', '500' ) );
     $lines[] = '  y: '     . absint( $opt( 'ev_gauge_y', '375' ) );
+    $lines[] = '';
+
+    // ---- custom_entities -----------------------------
+    $custom_raw  = get_option( 'ha_powerflow_custom_entities', '[]' );
+    $custom_list = json_decode( $custom_raw ?: '[]', true );
+    if ( ! is_array( $custom_list ) ) $custom_list = [];
+
+    $lines[] = 'custom_entities:';
+    if ( empty( $custom_list ) ) {
+        $lines[] = '  []';
+    } else {
+        foreach ( $custom_list as $item ) {
+            $lines[] = '  - id: '        . ha_pf_yaml_scalar( $item['id']        ?? '' );
+            $lines[] = '    label: '     . ha_pf_yaml_scalar( $item['label']     ?? '' );
+            $lines[] = '    entity_id: ' . ha_pf_yaml_scalar( $item['entity_id'] ?? '' );
+            $lines[] = '    unit: '      . ha_pf_yaml_scalar( $item['unit']      ?? '' );
+            $lines[] = '    size: '      . absint( $item['size'] ?? 14 );
+            $lines[] = '    rot: '       . intval( $item['rot'] ?? 0 );
+            $lines[] = '    x: '         . absint( $item['x']   ?? 0 );
+            $lines[] = '    y: '         . absint( $item['y']   ?? 0 );
+            $lines[] = '    visible: '   . ( ! empty( $item['visible'] ) ? 'true' : 'false' );
+        }
+    }
 
     return implode( "\n", $lines ) . "\n";
 }
@@ -403,6 +426,28 @@ function ha_pf_import_config( $yaml_string ) {
         if ( isset( $gauge['y'] ) ) {
             update_option( 'ha_powerflow_ev_gauge_y', absint( $gauge['y'] ) );
         }
+    }
+
+    // Custom entities
+    if ( isset( $data['custom_entities'] ) && is_array( $data['custom_entities'] ) ) {
+        $items = [];
+        foreach ( $data['custom_entities'] as $item ) {
+            if ( ! is_array( $item ) || empty( $item['id'] ) ) continue;
+            $id = preg_replace( '/[^a-z0-9_]/', '', strtolower( sanitize_text_field( $item['id'] ) ) );
+            if ( $id === '' ) continue;
+            $items[] = [
+                'id'        => $id,
+                'label'     => substr( sanitize_text_field( $item['label']     ?? '' ), 0, 60 ),
+                'entity_id' => substr( sanitize_text_field( $item['entity_id'] ?? '' ), 0, 100 ),
+                'unit'      => substr( sanitize_text_field( $item['unit']      ?? '' ), 0, 20 ),
+                'size'      => min( 72, max( 6, absint( $item['size'] ?? 14 ) ) ),
+                'rot'       => intval( $item['rot'] ?? 0 ),
+                'x'         => absint( $item['x']   ?? 0 ),
+                'y'         => absint( $item['y']   ?? 0 ),
+                'visible'   => ! empty( $item['visible'] ),
+            ];
+        }
+        update_option( 'ha_powerflow_custom_entities', wp_json_encode( $items ) );
     }
 
     return true;

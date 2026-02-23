@@ -115,6 +115,30 @@ function ha_pf_shortcode() {
     $ev_gauge_x       = ha_pf_pos( 'ev_gauge_x', 500 );
     $ev_gauge_y       = ha_pf_pos( 'ev_gauge_y', 375 );
 
+    // Custom entities — JSON blob, filtered to visible only for front end
+    $custom_raw  = get_option( 'ha_powerflow_custom_entities', '[]' );
+    $custom_all  = json_decode( $custom_raw ?: '[]', true );
+    if ( ! is_array( $custom_all ) ) $custom_all = [];
+    // Only pass visible ones to JS; build keyed arrays for labels/positions/units
+    $custom_entities  = [];   // key => entity_id
+    $custom_labels    = [];   // key => display name
+    $custom_positions = [];   // key => [rot, x, y]
+    $custom_units     = [];   // key => unit override
+    $custom_sizes     = [];   // key => font size
+    foreach ( $custom_all as $item ) {
+        if ( empty( $item['visible'] ) ) continue;
+        $ckey = 'custom__' . ( $item['id'] ?? '' );
+        $custom_entities[ $ckey ]  = $item['entity_id'] ?? '';
+        $custom_labels[ $ckey ]    = $item['label']     ?? '';
+        $custom_positions[ $ckey ] = [
+            'rot' => intval( $item['rot'] ?? 0 ),
+            'x'   => absint( $item['x']   ?? 0 ),
+            'y'   => absint( $item['y']   ?? 0 ),
+        ];
+        $custom_units[ $ckey ] = $item['unit'] ?? '';
+        $custom_sizes[ $ckey ] = max( 6, min( 72, absint( $item['size'] ?? 14 ) ) );
+    }
+
     // Background image
     $default_img = HA_PF_URL . 'assets/ha-powerflow.png';
     $image_url   = ha_pf_opt( 'image_url', $default_img );
@@ -158,6 +182,11 @@ function ha_pf_shortcode() {
         $entities[ $key ] = ha_pf_opt( $key );
     }
 
+    // Merge custom entities (only visible ones)
+    foreach ( $custom_entities as $ckey => $eid ) {
+        $entities[ $ckey ] = $eid;
+    }
+
     // Label text displayed next to each entity value
     $labels = [
         'grid_power'         => 'Grid',
@@ -174,6 +203,9 @@ function ha_pf_shortcode() {
         'ev_soc'             => 'SOC',
     ];
     if ( $grid_export ) { $labels['grid_energy_out'] = 'Grid Out'; }
+    foreach ( $custom_labels as $ckey => $clabel ) {
+        $labels[ $ckey ] = $clabel;
+    }
 
     // Text label position defaults [rot, x, y]
     $pos_defaults = [
@@ -204,6 +236,10 @@ function ha_pf_shortcode() {
             'x'   => ha_pf_pos( $key . '_x_pos', $def_x ),
             'y'   => ha_pf_pos( $key . '_y_pos', $def_y ),
         ];
+    }
+    // Merge custom entity positions (after built-in positions are set)
+    foreach ( $custom_positions as $ckey => $cpos ) {
+        $positions[ $ckey ] = $cpos;
     }
 
     ob_start();
@@ -334,9 +370,11 @@ function ha_pf_shortcode() {
         const EV_GAUGE_CX    = <?php echo (int) $ev_gauge_x; ?>;
         const EV_GAUGE_CY    = <?php echo (int) $ev_gauge_y; ?>;
 
-        const ENTITIES  = <?php echo wp_json_encode( $entities ); ?>;
-        const LABELS    = <?php echo wp_json_encode( $labels ); ?>;
-        const POSITIONS = <?php echo wp_json_encode( $positions ); ?>;
+        const ENTITIES     = <?php echo wp_json_encode( $entities ); ?>;
+        const LABELS       = <?php echo wp_json_encode( $labels ); ?>;
+        const POSITIONS    = <?php echo wp_json_encode( $positions ); ?>;
+        const CUSTOM_UNITS = <?php echo wp_json_encode( $custom_units ); ?>;
+        const CUSTOM_SIZES = <?php echo wp_json_encode( $custom_sizes ); ?>;
 
         const PATHS = {
             grid: { fwd: <?php echo wp_json_encode( $paths['grid_fwd'] ); ?>,
@@ -387,7 +425,7 @@ function ha_pf_shortcode() {
             Object.keys( ENTITIES ).forEach( key => {
                 const t = document.createElementNS( 'http://www.w3.org/2000/svg', 'text' );
                 t.setAttribute( 'id', 'ha-pf-txt-' + key + '-' + UID );
-                t.setAttribute( 'font-size', '18' );
+                t.setAttribute( 'font-size', CUSTOM_SIZES[ key ] || '18' );
                 t.textContent = ( LABELS[ key ] || key ).toUpperCase() + ': …';
                 svg.appendChild( t );
             } );
@@ -767,11 +805,15 @@ function ha_pf_shortcode() {
                 const el   = document.getElementById( 'ha-pf-txt-' + key + '-' + UID );
                 if ( ! data || ! el ) continue;
 
-                const label = LABELS[ key ] || key;
-                const unit  = ( data.unit || '' ).toLowerCase();
+                const label        = LABELS[ key ] || key;
+                const unitOverride = CUSTOM_UNITS[ key ] || '';
+                const unit         = unitOverride
+                    ? unitOverride.toLowerCase()
+                    : ( data.unit || '' ).toLowerCase();
+                const displayUnit  = unitOverride || data.unit || '';
 
                 el.textContent = label + ': ' + (
-                    unit === 'w' ? formatPower( data.state ) : data.state + ' ' + data.unit
+                    unit === 'w' ? formatPower( data.state ) : data.state + ( displayUnit ? ' ' + displayUnit : '' )
                 );
 
                 const watts = parseFloat( data.state );

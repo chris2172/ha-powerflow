@@ -63,6 +63,13 @@ function ha_pf_register_settings() {
     ] );
 
     // --------------------------------------------------
+    // Custom entities (stored as a JSON blob)
+    // --------------------------------------------------
+    register_setting( $group, 'ha_powerflow_custom_entities', [
+        'sanitize_callback' => 'ha_pf_sanitize_custom_entities',
+    ] );
+
+    // --------------------------------------------------
     // EV gauge widget
     // --------------------------------------------------
     register_setting( $group, 'ha_powerflow_ev_gauge_enable', [
@@ -165,4 +172,45 @@ function ha_pf_sanitize_int( $val ) {
 /** Unsigned integer (x/y positions are always positive). */
 function ha_pf_sanitize_absint( $val ) {
     return absint( $val );
+}
+
+/**
+ * Custom entities: stored as a JSON array of objects.
+ * Each object: { "id": string, "label": string, "entity_id": string,
+ *               "unit": string, "rot": int, "x": int, "y": int, "visible": bool }
+ * Sanitises every field before saving.
+ */
+function ha_pf_sanitize_custom_entities( $raw ) {
+    if ( empty( $raw ) ) return '[]';
+
+    $decoded = json_decode( $raw, true );
+    if ( ! is_array( $decoded ) ) return '[]';
+
+    $clean = [];
+    foreach ( $decoded as $item ) {
+        if ( ! is_array( $item ) ) continue;
+
+        // id: alphanumeric + underscore only, max 40 chars
+        $id = preg_replace( '/[^a-z0-9_]/', '', strtolower( sanitize_text_field( $item['id'] ?? '' ) ) );
+        $id = substr( $id, 0, 40 );
+        if ( $id === '' ) continue;   // skip items with no id
+
+        $size = absint( $item['size'] ?? 14 );
+        if ( $size < 6  ) $size = 6;
+        if ( $size > 72 ) $size = 72;
+
+        $clean[] = [
+            'id'        => $id,
+            'label'     => substr( sanitize_text_field( $item['label']     ?? '' ), 0, 60 ),
+            'entity_id' => substr( sanitize_text_field( $item['entity_id'] ?? '' ), 0, 100 ),
+            'unit'      => substr( sanitize_text_field( $item['unit']      ?? '' ), 0, 20 ),
+            'size'      => $size,
+            'rot'       => intval( $item['rot'] ?? 0 ),
+            'x'         => absint( $item['x']   ?? 0 ),
+            'y'         => absint( $item['y']   ?? 0 ),
+            'visible'   => ! empty( $item['visible'] ),
+        ];
+    }
+
+    return wp_json_encode( $clean );
 }

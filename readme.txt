@@ -4,7 +4,7 @@ Tags: home assistant, energy, dashboard, solar, power
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.1.0
+Stable tag: 2.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -69,6 +69,15 @@ Yes. A default background image is included in the plugin's `assets/` folder and
 2. The HA PowerFlow settings page showing the connection and entity configuration.
 
 == Changelog ==
+
+= 2.2.0 =
+* Added battery gauge widget (two-ring SOC/power visualisation)
+* Added EV SOC gauge widget (same two-ring layout as battery gauge)
+* Added custom entity labels — add any HA entity to the dashboard with display name, unit, position and visibility control
+* Grid Energy Out now hidden when neither Solar nor Battery is enabled (no export agreement needed)
+* Fixed config snapshot to cover all registered options (100% coverage)
+* Fixed label/position defaults being ignored when a previous version saved 0 to the database
+* Config YAML export and import now includes battery gauge, EV gauge and custom entities
 
 = 2.1.0 =
 * Added click-to-coordinate developer tool for positioning labels

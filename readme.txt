@@ -12,16 +12,21 @@ A real-time animated power-flow dashboard for WordPress, pulling live data from 
 
 == Description ==
 
-HA PowerFlow displays a real-time animated power-flow diagram on any WordPress page or post. It connects to your Home Assistant installation and shows live energy data — solar generation, grid import/export, home consumption, battery charging/discharging, and EV charging — as animated dots travelling along SVG paths overlaid on a custom background image.
+HA PowerFlow displays a live, animated power-flow diagram on any WordPress page or post. It connects to your Home Assistant installation every 5 seconds and shows current energy data as animated dots travelling along SVG paths overlaid on a custom background image.
 
 **Key features:**
 
 * Live data refreshed every 5 seconds from Home Assistant
-* Animated flow dots whose speed reflects power levels
+* Animated flow dots whose direction and speed reflect live power levels
 * Fully configurable background image, colours, label positions and flow paths
-* Your Home Assistant token is encrypted server-side using AES-256 and never sent to the browser
-* Optional Solar, Battery and EV sections toggled on or off
+* Your Home Assistant token is AES-256 encrypted server-side and never sent to the browser
+* Optional Solar, Battery and EV sections — enable only what you have
+* Battery gauge widget: two-ring SVG gauge showing SOC and charge/discharge state
+* EV gauge widget: same two-ring gauge for your electric vehicle's SOC
+* Custom entity labels: add any Home Assistant entity to the dashboard with its own display name, unit, font size, position and visibility toggle
+* Grid Energy Out automatically hidden when neither Solar nor Battery is enabled
 * Configuration automatically backed up to YAML on every save (last 50 kept)
+* Full config import/export including AES-256 encrypted token
 * Built-in click-to-coordinate tool for positioning labels without guesswork
 
 **Usage:**
@@ -63,21 +68,33 @@ At `wp-content/uploads/ha-powerflow/config/`. Files are named `YYMMDD-hhmmss-con
 = Is the background image included? =
 Yes. A default background image is included in the plugin's `assets/` folder and is used automatically until you upload your own.
 
+= What entities does Grid Energy Out require? =
+Grid Energy Out is only shown when Solar or Battery is enabled. Without generation capability you have no export agreement, so the field is hidden to keep the UI uncluttered.
+
+= What are Custom Entity Labels? =
+Custom Entity Labels let you add any Home Assistant sensor to the dashboard — for example, battery temperature, inverter frequency, or house water temperature. Each custom entity has its own Display Name, Entity ID, Unit of Measurement, Font Size, Rotation, X/Y position and a Visible toggle. Only visible entries appear on the dashboard.
+
+= What do the gauge widgets show? =
+The Battery Gauge shows a two-ring SVG circle. The outer ring fills proportionally to the battery's state of charge (green above 20%, amber 10–20%, red below 10%). The inner circle turns green when the battery is charging and red when discharging. The EV Gauge works the same way for your electric vehicle.
+
 == Screenshots ==
 
 1. The live power-flow dashboard displayed on a WordPress page.
 2. The HA PowerFlow settings page showing the connection and entity configuration.
+3. Battery and EV gauge widgets on the dashboard.
+4. The Custom Entity Labels panel in the settings page.
 
 == Changelog ==
 
 = 2.2.0 =
-* Added battery gauge widget (two-ring SOC/power visualisation)
-* Added EV SOC gauge widget (same two-ring layout as battery gauge)
-* Added custom entity labels — add any HA entity to the dashboard with display name, unit, position and visibility control
-* Grid Energy Out now hidden when neither Solar nor Battery is enabled (no export agreement needed)
-* Fixed config snapshot to cover all registered options (100% coverage)
-* Fixed label/position defaults being ignored when a previous version saved 0 to the database
-* Config YAML export and import now includes battery gauge, EV gauge and custom entities
+* Added Battery Gauge widget — two-ring SVG showing SOC and charge/discharge state
+* Added EV SOC Gauge widget — same two-ring layout as battery gauge
+* Added Custom Entity Labels — add any HA entity with display name, unit, font size, position and visibility control
+* Added Font Size field to custom entities so secondary labels can be smaller than primary ones
+* Grid Energy Out now hidden when neither Solar nor Battery is enabled
+* Fixed config snapshot to cover 100% of registered options
+* Fixed label/position/rotation defaults being ignored when a previous version saved 0 to the database
+* Config YAML export and import now covers battery gauge, EV gauge and custom entities
 
 = 2.1.0 =
 * Added click-to-coordinate developer tool for positioning labels
@@ -100,6 +117,9 @@ Yes. A default background image is included in the plugin's `assets/` folder and
 * Initial release
 
 == Upgrade Notice ==
+
+= 2.2.0 =
+Adds battery and EV gauge widgets, custom entity labels, and fixes a regression affecting upgrades from v1.x where all positions defaulted to 0.
 
 = 2.1.0 =
 Adds automatic config backups and the click-to-coordinate positioning tool. Recommended upgrade for all users.

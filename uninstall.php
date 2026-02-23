@@ -65,6 +65,9 @@ $simple_options = [
     'ha_powerflow_battery_gauge_enable',
     'ha_powerflow_battery_gauge_x',
     'ha_powerflow_battery_gauge_y',
+    'ha_powerflow_ev_gauge_enable',
+    'ha_powerflow_ev_gauge_x',
+    'ha_powerflow_ev_gauge_y',
 ];
 
 foreach ( $simple_options as $option ) {

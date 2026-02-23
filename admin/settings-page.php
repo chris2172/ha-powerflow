@@ -349,6 +349,48 @@ function ha_pf_settings_page() {
                         </div>
                         <div class="ha-pf-panel-body">
                             <?php ha_pf_entity_table( $ev_entities ); ?>
+
+                            <h3><?php esc_html_e( 'EV Gauge Widget', 'ha-powerflow' ); ?></h3>
+                            <p class="description" style="margin-bottom:12px;">
+                                <?php esc_html_e( 'Displays a two-ring SOC/power gauge on the dashboard. Outer ring = state of charge. Inner circle = green when charging, red when discharging.', 'ha-powerflow' ); ?>
+                            </p>
+
+                            <div style="margin-bottom:12px;">
+                                <label class="ha-pf-checkbox-label">
+                                    <input type="hidden" name="ha_powerflow_ev_gauge_enable" value="0">
+                                    <input type="checkbox"
+                                           name="ha_powerflow_ev_gauge_enable"
+                                           value="1"
+                                           <?php checked( get_option( 'ha_powerflow_ev_gauge_enable' ), '1' ); ?>>
+                                    <span>
+                                        <span class="ha-pf-check-text"><?php esc_html_e( 'Show EV gauge', 'ha-powerflow' ); ?></span>
+                                        <span class="description"><?php esc_html_e( 'Only visible when EV is enabled above.', 'ha-powerflow' ); ?></span>
+                                    </span>
+                                </label>
+                            </div>
+
+                            <div class="ha-pf-entity-header" style="grid-template-columns:1fr 90px 90px;">
+                                <span><?php esc_html_e( 'Gauge Position', 'ha-powerflow' ); ?></span>
+                                <span>X</span>
+                                <span>Y</span>
+                            </div>
+                            <div class="ha-pf-entity-row" style="grid-template-columns:1fr 90px 90px;">
+                                <div class="ha-pf-entity-label"><?php esc_html_e( 'Centre point (SVG units)', 'ha-powerflow' ); ?></div>
+                                <div class="ha-pf-coord-group">
+                                    <span class="ha-pf-coord-label">X</span>
+                                    <input type="number" min="0" max="1000"
+                                        name="ha_powerflow_ev_gauge_x"
+                                        value="<?php echo esc_attr( get_option( 'ha_powerflow_ev_gauge_x', '500' ) ); ?>"
+                                        placeholder="500">
+                                </div>
+                                <div class="ha-pf-coord-group">
+                                    <span class="ha-pf-coord-label">Y</span>
+                                    <input type="number" min="0" max="750"
+                                        name="ha_powerflow_ev_gauge_y"
+                                        value="<?php echo esc_attr( get_option( 'ha_powerflow_ev_gauge_y', '375' ) ); ?>"
+                                        placeholder="375">
+                                </div>
+                            </div>
                         </div>
                     </div>
 

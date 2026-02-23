@@ -219,6 +219,13 @@ function ha_pf_build_yaml() {
     $lines[] = '  enable: ' . ( $opt( 'battery_gauge_enable' ) === '1' ? 'true' : 'false' );
     $lines[] = '  x: '     . absint( $opt( 'battery_gauge_x', '95'  ) );
     $lines[] = '  y: '     . absint( $opt( 'battery_gauge_y', '605' ) );
+    $lines[] = '';
+
+    // ---- ev_gauge ------------------------------------
+    $lines[] = 'ev_gauge:';
+    $lines[] = '  enable: ' . ( $opt( 'ev_gauge_enable' ) === '1' ? 'true' : 'false' );
+    $lines[] = '  x: '     . absint( $opt( 'ev_gauge_x', '500' ) );
+    $lines[] = '  y: '     . absint( $opt( 'ev_gauge_y', '375' ) );
 
     return implode( "\n", $lines ) . "\n";
 }
@@ -381,6 +388,20 @@ function ha_pf_import_config( $yaml_string ) {
         }
         if ( isset( $gauge['y'] ) ) {
             update_option( 'ha_powerflow_battery_gauge_y', absint( $gauge['y'] ) );
+        }
+    }
+
+    // EV gauge
+    if ( isset( $data['ev_gauge'] ) ) {
+        $gauge = $data['ev_gauge'];
+        if ( isset( $gauge['enable'] ) ) {
+            update_option( 'ha_powerflow_ev_gauge_enable', $gauge['enable'] ? '1' : '0' );
+        }
+        if ( isset( $gauge['x'] ) ) {
+            update_option( 'ha_powerflow_ev_gauge_x', absint( $gauge['x'] ) );
+        }
+        if ( isset( $gauge['y'] ) ) {
+            update_option( 'ha_powerflow_ev_gauge_y', absint( $gauge['y'] ) );
         }
     }
 

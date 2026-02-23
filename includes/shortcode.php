@@ -83,6 +83,11 @@ function ha_pf_shortcode() {
     $bat_gauge_x      = ha_pf_pos( 'battery_gauge_x', 95  );
     $bat_gauge_y      = ha_pf_pos( 'battery_gauge_y', 605 );
 
+    // EV gauge widget
+    $ev_gauge         = ( ha_pf_opt( 'ev_gauge_enable' ) === '1' ) && $ev;
+    $ev_gauge_x       = ha_pf_pos( 'ev_gauge_x', 500 );
+    $ev_gauge_y       = ha_pf_pos( 'ev_gauge_y', 375 );
+
     // Background image
     $default_img = HA_PF_URL . 'assets/ha-powerflow.png';
     $image_url   = ha_pf_opt( 'image_url', $default_img );
@@ -270,6 +275,11 @@ function ha_pf_shortcode() {
         <g id="ha-pf-bat-gauge-<?php echo esc_attr( $uid ); ?>"></g>
         <?php endif; ?>
 
+        <?php if ( $ev_gauge ) : ?>
+        <!-- EV gauge widget — rings built and updated by JS -->
+        <g id="ha-pf-ev-gauge-<?php echo esc_attr( $uid ); ?>"></g>
+        <?php endif; ?>
+
     </svg>
     </div>
 
@@ -291,6 +301,9 @@ function ha_pf_shortcode() {
         const BATTERY_GAUGE  = <?php echo $bat_gauge ? 'true' : 'false'; ?>;
         const GAUGE_CX       = <?php echo (int) $bat_gauge_x; ?>;
         const GAUGE_CY       = <?php echo (int) $bat_gauge_y; ?>;
+        const EV_GAUGE       = <?php echo $ev_gauge ? 'true' : 'false'; ?>;
+        const EV_GAUGE_CX    = <?php echo (int) $ev_gauge_x; ?>;
+        const EV_GAUGE_CY    = <?php echo (int) $ev_gauge_y; ?>;
 
         const ENTITIES  = <?php echo wp_json_encode( $entities ); ?>;
         const LABELS    = <?php echo wp_json_encode( $labels ); ?>;
@@ -564,6 +577,140 @@ function ha_pf_shortcode() {
         }
 
         // -----------------------------------------------
+        // EV gauge widget
+        // Same two-ring layout as battery gauge.
+        // Outer ring = EV SOC arc. Inner circle = green when charging (positive watts).
+        // Only rendered when EV_GAUGE is true.
+        // -----------------------------------------------
+        (function initEvGauge() {
+            if ( ! EV_GAUGE ) return;
+
+            const g = document.getElementById( 'ha-pf-ev-gauge-' + UID );
+            if ( ! g ) return;
+
+            const R_OUTER = 52;
+            const R_INNER = 36;
+            const STROKE  = 8;
+            const CX = EV_GAUGE_CX;
+            const CY = EV_GAUGE_CY;
+
+            // ── background track ──
+            const track = document.createElementNS( 'http://www.w3.org/2000/svg', 'circle' );
+            track.setAttribute( 'cx', CX );
+            track.setAttribute( 'cy', CY );
+            track.setAttribute( 'r',  R_OUTER );
+            track.setAttribute( 'fill', 'none' );
+            track.setAttribute( 'stroke', 'rgba(255,255,255,0.15)' );
+            track.setAttribute( 'stroke-width', STROKE );
+            g.appendChild( track );
+
+            // ── SOC arc ──
+            const circumference = 2 * Math.PI * R_OUTER;
+            const arc = document.createElementNS( 'http://www.w3.org/2000/svg', 'circle' );
+            arc.setAttribute( 'cx', CX );
+            arc.setAttribute( 'cy', CY );
+            arc.setAttribute( 'r',  R_OUTER );
+            arc.setAttribute( 'fill', 'none' );
+            arc.setAttribute( 'stroke', '#5EC766' );
+            arc.setAttribute( 'stroke-width', STROKE );
+            arc.setAttribute( 'stroke-linecap', 'round' );
+            arc.setAttribute( 'stroke-dasharray', circumference );
+            arc.setAttribute( 'stroke-dashoffset', circumference );
+            arc.setAttribute( 'transform', 'rotate(-90 ' + CX + ' ' + CY + ')' );
+            arc.style.transition = 'stroke-dashoffset 0.8s ease, stroke 0.4s ease';
+            g.appendChild( arc );
+
+            // ── inner power fill circle ──
+            const inner = document.createElementNS( 'http://www.w3.org/2000/svg', 'circle' );
+            inner.setAttribute( 'cx', CX );
+            inner.setAttribute( 'cy', CY );
+            inner.setAttribute( 'r',  R_INNER );
+            inner.setAttribute( 'fill', 'rgba(0,0,0,0.55)' );
+            inner.style.transition = 'fill 0.4s ease';
+            g.appendChild( inner );
+
+            // ── SOC label ──
+            const socText = document.createElementNS( 'http://www.w3.org/2000/svg', 'text' );
+            socText.setAttribute( 'id', 'ha-pf-ev-gauge-soc-' + UID );
+            socText.setAttribute( 'x', CX );
+            socText.setAttribute( 'y', CY - 10 );
+            socText.setAttribute( 'text-anchor', 'middle' );
+            socText.setAttribute( 'font-size', '14' );
+            socText.setAttribute( 'font-weight', 'bold' );
+            socText.setAttribute( 'fill', '#ffffff' );
+            socText.textContent = '–%';
+            g.appendChild( socText );
+
+            // ── power label ──
+            const pwrText = document.createElementNS( 'http://www.w3.org/2000/svg', 'text' );
+            pwrText.setAttribute( 'id', 'ha-pf-ev-gauge-pwr-' + UID );
+            pwrText.setAttribute( 'x', CX );
+            pwrText.setAttribute( 'y', CY + 8 );
+            pwrText.setAttribute( 'text-anchor', 'middle' );
+            pwrText.setAttribute( 'font-size', '11' );
+            pwrText.setAttribute( 'fill', '#cccccc' );
+            pwrText.textContent = '–';
+            g.appendChild( pwrText );
+
+            // ── EV label below ring ──
+            const label = document.createElementNS( 'http://www.w3.org/2000/svg', 'text' );
+            label.setAttribute( 'x', CX );
+            label.setAttribute( 'y', CY + R_OUTER + STROKE + 14 );
+            label.setAttribute( 'text-anchor', 'middle' );
+            label.setAttribute( 'font-size', '11' );
+            label.setAttribute( 'fill', 'rgba(255,255,255,0.6)' );
+            label.setAttribute( 'letter-spacing', '2' );
+            label.textContent = 'EV';
+            g.appendChild( label );
+
+            // Store references for updater
+            g._arc     = arc;
+            g._inner   = inner;
+            g._circumf = circumference;
+        }());
+
+        function updateEvGauge( soc, watts ) {
+            if ( ! EV_GAUGE ) return;
+
+            const g = document.getElementById( 'ha-pf-ev-gauge-' + UID );
+            if ( ! g || ! g._arc ) return;
+
+            const circumf = g._circumf;
+
+            // SOC arc — clamp 0-100
+            const pct    = Math.min( 100, Math.max( 0, parseFloat( soc ) || 0 ) );
+            const offset = circumf * ( 1 - pct / 100 );
+            g._arc.setAttribute( 'stroke-dashoffset', offset );
+
+            // Arc colour: green above 20%, amber 10-20%, red below 10%
+            const arcColour = pct >= 20 ? '#5EC766' : pct >= 10 ? '#f59e0b' : '#ef4444';
+            g._arc.setAttribute( 'stroke', arcColour );
+
+            // Inner fill: green = charging (positive watts), red = discharging
+            const w = parseFloat( watts );
+            if ( ! isNaN( w ) && w !== 0 ) {
+                g._inner.setAttribute( 'fill', w > 0 ? 'rgba(94,199,102,0.30)' : 'rgba(239,68,68,0.30)' );
+            } else {
+                g._inner.setAttribute( 'fill', 'rgba(0,0,0,0.55)' );
+            }
+
+            // SOC text
+            const socEl = document.getElementById( 'ha-pf-ev-gauge-soc-' + UID );
+            if ( socEl ) socEl.textContent = pct.toFixed( 0 ) + '%';
+
+            // Power text
+            const pwrEl = document.getElementById( 'ha-pf-ev-gauge-pwr-' + UID );
+            if ( pwrEl ) {
+                if ( isNaN( w ) ) {
+                    pwrEl.textContent = '–';
+                } else {
+                    pwrEl.textContent = ( w > 0 ? '+' : '' ) + formatPower( w );
+                    pwrEl.setAttribute( 'fill', w > 0 ? '#5EC766' : '#ef4444' );
+                }
+            }
+        }
+
+        // -----------------------------------------------
         // Power formatting helper (inside IIFE — no global leak)
         // -----------------------------------------------
         function formatPower( value ) {
@@ -578,8 +725,10 @@ function ha_pf_shortcode() {
         // Main update loop
         // -----------------------------------------------
         async function updateAll() {
-            let gaugeSoc   = null;
-            let gaugeWatts = null;
+            let gaugeSoc    = null;
+            let gaugeWatts  = null;
+            let evGaugeSoc  = null;
+            let evGaugeWatts = null;
 
             for ( const key of Object.keys( ENTITIES ) ) {
                 const entityId = ENTITIES[ key ];
@@ -607,12 +756,21 @@ function ha_pf_shortcode() {
                     gaugeWatts = watts;
                 }
                 if ( key === 'battery_soc'   && BATTERY ) gaugeSoc = data.state;
-                if ( key === 'ev_power'      && EV      ) animateLine( 'ev',  'ev',  watts );
+                if ( key === 'ev_power'      && EV      ) {
+                    animateLine( 'ev',  'ev',  watts );
+                    evGaugeWatts = watts;
+                }
+                if ( key === 'ev_soc'        && EV      ) evGaugeSoc = data.state;
             }
 
             // Update battery gauge if both values were received
             if ( BATTERY_GAUGE && gaugeSoc !== null ) {
                 updateBatteryGauge( gaugeSoc, gaugeWatts !== null ? gaugeWatts : 0 );
+            }
+
+            // Update EV gauge if both values were received
+            if ( EV_GAUGE && evGaugeSoc !== null ) {
+                updateEvGauge( evGaugeSoc, evGaugeWatts !== null ? evGaugeWatts : 0 );
             }
         }
 

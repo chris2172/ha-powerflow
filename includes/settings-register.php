@@ -63,6 +63,19 @@ function ha_pf_register_settings() {
     ] );
 
     // --------------------------------------------------
+    // EV gauge widget
+    // --------------------------------------------------
+    register_setting( $group, 'ha_powerflow_ev_gauge_enable', [
+        'sanitize_callback' => 'ha_pf_sanitize_checkbox',
+    ] );
+    register_setting( $group, 'ha_powerflow_ev_gauge_x', [
+        'sanitize_callback' => 'ha_pf_sanitize_absint',
+    ] );
+    register_setting( $group, 'ha_powerflow_ev_gauge_y', [
+        'sanitize_callback' => 'ha_pf_sanitize_absint',
+    ] );
+
+    // --------------------------------------------------
     // Colour settings
     // --------------------------------------------------
     foreach ( [ 'text_colour', 'line_colour', 'dot_colour' ] as $colour ) {

@@ -56,8 +56,23 @@
         syncToggle( cb );
         cb.addEventListener( 'change', function () {
             syncToggle( this );
+            syncGridExport();
         } );
     } );
+
+    // -------------------------------------------------------
+    // Grid Export row — visible only when Solar or Battery is enabled
+    // -------------------------------------------------------
+    function syncGridExport() {
+        const solarCb   = document.querySelector( '[name="ha_powerflow_enable_solar"][type="checkbox"]' );
+        const batteryCb = document.querySelector( '[name="ha_powerflow_enable_battery"][type="checkbox"]' );
+        const row       = document.getElementById( 'ha-pf-grid-export-row' );
+        if ( ! row ) return;
+        const show = ( solarCb && solarCb.checked ) || ( batteryCb && batteryCb.checked );
+        row.style.display = show ? '' : 'none';
+    }
+
+    syncGridExport();
 
     // -------------------------------------------------------
     // Colour pickers — live hex label update

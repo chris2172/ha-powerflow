@@ -28,12 +28,15 @@ function ha_pf_settings_page() {
     $current_img = get_option( 'ha_powerflow_image_url', $default_img ) ?: $default_img;
 
     $mandatory_entities = [
-        'grid_power'      => 'Grid Power',
-        'grid_energy_in'  => 'Grid Energy In',
-        'grid_energy_out' => 'Grid Energy Out',
-        'load_power'      => 'Load Power',
-        'load_energy'     => 'Load Energy',
+        'grid_power'     => 'Grid Power',
+        'grid_energy_in' => 'Grid Energy In',
+        'load_power'     => 'Load Power',
+        'load_energy'    => 'Load Energy',
     ];
+
+    // Grid export only applies when solar or battery is enabled
+    $show_grid_export = ( get_option( 'ha_powerflow_enable_solar' ) === '1' )
+                     || ( get_option( 'ha_powerflow_enable_battery' ) === '1' );
     $solar_entities = [
         'pv_power'  => 'PV Power',
         'pv_energy' => 'PV Energy',
@@ -254,6 +257,11 @@ function ha_pf_settings_page() {
                         </div>
                         <div class="ha-pf-panel-body">
                             <?php ha_pf_entity_table( $mandatory_entities ); ?>
+
+                            <div id="ha-pf-grid-export-row"
+                                 <?php if ( ! $show_grid_export ) echo 'style="display:none;"'; ?>>
+                                <?php ha_pf_entity_table( [ 'grid_energy_out' => 'Grid Energy Out' ] ); ?>
+                            </div>
                         </div>
                     </div>
 

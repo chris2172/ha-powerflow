@@ -101,6 +101,10 @@ function ha_pf_shortcode() {
     $battery = ( ha_pf_opt( 'enable_battery' ) === '1' );
     $ev      = ( ha_pf_opt( 'enable_ev' )      === '1' );
 
+    // Grid export is only relevant when solar or battery is enabled —
+    // without generation a user cannot export energy to the grid.
+    $grid_export = $solar || $battery;
+
     // Battery gauge widget
     $bat_gauge        = ( ha_pf_opt( 'battery_gauge_enable' ) === '1' ) && $battery;
     $bat_gauge_x      = ha_pf_pos( 'battery_gauge_x', 95  );
@@ -141,9 +145,10 @@ function ha_pf_shortcode() {
     $entities = [];
 
     $all_keys = [
-        'grid_power', 'grid_energy_in', 'grid_energy_out',
+        'grid_power', 'grid_energy_in',
         'load_power', 'load_energy',
     ];
+    if ( $grid_export ) { $all_keys[] = 'grid_energy_out'; }
     if ( $solar )   { $all_keys[] = 'pv_power';           $all_keys[] = 'pv_energy'; }
     if ( $battery ) { $all_keys[] = 'battery_power';      $all_keys[] = 'battery_energy_in';
                       $all_keys[] = 'battery_energy_out'; $all_keys[] = 'battery_soc'; }
@@ -157,7 +162,6 @@ function ha_pf_shortcode() {
     $labels = [
         'grid_power'         => 'Grid',
         'grid_energy_in'     => 'Grid In',
-        'grid_energy_out'    => 'Grid Out',
         'load_power'         => 'Load',
         'load_energy'        => 'Load Energy',
         'pv_power'           => 'PV',
@@ -169,12 +173,12 @@ function ha_pf_shortcode() {
         'ev_power'           => 'EV',
         'ev_soc'             => 'SOC',
     ];
+    if ( $grid_export ) { $labels['grid_energy_out'] = 'Grid Out'; }
 
     // Text label position defaults [rot, x, y]
     $pos_defaults = [
         'grid_power'         => [  0, 740, 210 ],
         'grid_energy_in'     => [  0, 740,  70 ],
-        'grid_energy_out'    => [  0, 740,  90 ],
         'load_power'         => [ -6, 360, 180 ],
         'load_energy'        => [  0, 360,  70 ],
         'pv_power'           => [ -9,  49, 312 ],
@@ -186,6 +190,7 @@ function ha_pf_shortcode() {
         'ev_power'           => [ 15, 750, 460 ],
         'ev_soc'             => [ 15, 750, 480 ],
     ];
+    if ( $grid_export ) { $pos_defaults['grid_energy_out'] = [ 0, 740, 90 ]; }
 
     // Nonce for the AJAX proxy (safe to expose — action-locked, 12hr expiry)
     $nonce    = wp_create_nonce( 'ha_pf_proxy' );
@@ -317,9 +322,10 @@ function ha_pf_shortcode() {
         const UID      = <?php echo wp_json_encode( $uid ); ?>;
         const AJAX_URL = <?php echo wp_json_encode( $ajax_url ); ?>;
         const NONCE    = <?php echo wp_json_encode( $nonce ); ?>;
-        const SOLAR    = <?php echo $solar   ? 'true' : 'false'; ?>;
-        const BATTERY  = <?php echo $battery ? 'true' : 'false'; ?>;
-        const EV       = <?php echo $ev      ? 'true' : 'false'; ?>;
+        const SOLAR       = <?php echo $solar       ? 'true' : 'false'; ?>;
+        const BATTERY     = <?php echo $battery     ? 'true' : 'false'; ?>;
+        const EV          = <?php echo $ev          ? 'true' : 'false'; ?>;
+        const GRID_EXPORT = <?php echo $grid_export ? 'true' : 'false'; ?>;
         const DEBUG_CLICK    = <?php echo ( ha_pf_opt( 'debug_click' ) === '1' ) ? 'true' : 'false'; ?>;
         const BATTERY_GAUGE  = <?php echo $bat_gauge ? 'true' : 'false'; ?>;
         const GAUGE_CX       = <?php echo (int) $bat_gauge_x; ?>;

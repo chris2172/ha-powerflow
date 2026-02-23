@@ -87,8 +87,10 @@ function ha_pf_admin_enqueue( $hook ) {
     );
     // Pass the nonce for the image-copy AJAX call to JS
     wp_localize_script( 'ha-pf-admin', 'haPfAdmin', [
-        'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
-        'copyImageNonce' => wp_create_nonce( 'ha_pf_copy_image' ),
+        'ajaxUrl'             => admin_url( 'admin-ajax.php' ),
+        'copyImageNonce'      => wp_create_nonce( 'ha_pf_copy_image' ),
+        'importNonce'         => wp_create_nonce( 'ha_pf_import_config' ),
+        'testConnectionNonce' => wp_create_nonce( 'ha_pf_test_connection' ),
     ] );
 }
 

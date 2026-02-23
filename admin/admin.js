@@ -295,4 +295,166 @@
         mediaFrame.open();
     } );
 
+    // -------------------------------------------------------
+    // Test connection
+    // -------------------------------------------------------
+    ( function () {
+        var btn     = document.getElementById( 'ha-pf-test-btn' );
+        var result  = document.getElementById( 'ha-pf-test-result' );
+        var spinner = btn ? btn.querySelector( '.ha-pf-test-spinner' ) : null;
+        var icon    = btn ? btn.querySelector( '.ha-pf-test-icon' ) : null;
+
+        if ( ! btn || ! result ) return;
+
+        btn.addEventListener( 'click', function () {
+            setTestState( 'loading' );
+
+            var fd = new FormData();
+            fd.append( 'action', 'ha_pf_test_connection' );
+            fd.append( 'nonce',  haPfAdmin.testConnectionNonce );
+
+            fetch( haPfAdmin.ajaxUrl, { method: 'POST', body: fd } )
+                .then( function ( r ) { return r.json(); } )
+                .then( function ( data ) {
+                    if ( data.success ) {
+                        setTestState( 'success', data.data.detail || 'Connected successfully' );
+                    } else {
+                        var msg = ( data.data && data.data.message ) ? data.data.message : 'Connection failed';
+                        setTestState( 'error', msg );
+                    }
+                } )
+                .catch( function ( err ) {
+                    setTestState( 'error', 'Network error: ' + err.message );
+                } );
+        } );
+
+        function setTestState( state, text ) {
+            btn.disabled = ( state === 'loading' );
+            if ( spinner ) spinner.style.display = state === 'loading' ? 'inline-block' : 'none';
+            if ( icon )    icon.style.display    = state === 'loading' ? 'none' : '';
+
+            result.textContent = text || '';
+            result.className   = 'ha-pf-test-result' + ( text ? ' ha-pf-test-' + state : '' );
+        }
+    }() );
+
+    // -------------------------------------------------------
+    // Config restore: file picker → confirmation modal → AJAX
+    // -------------------------------------------------------
+    ( function () {
+
+        var restoreBtn    = document.getElementById( 'ha-pf-restore-btn' );
+        var fileInput     = document.getElementById( 'ha-pf-import-file' );
+        var overlay       = document.getElementById( 'ha-pf-restore-overlay' );
+        var cancelBtn     = document.getElementById( 'ha-pf-restore-cancel' );
+        var confirmBtn    = document.getElementById( 'ha-pf-restore-confirm' );
+        var filenameEl    = document.getElementById( 'ha-pf-restore-filename' );
+        var confirmText   = confirmBtn  ? confirmBtn.querySelector( '.ha-pf-restore-confirm-text' )  : null;
+        var confirmIcon   = confirmBtn  ? confirmBtn.querySelector( '.ha-pf-restore-confirm-icon' )  : null;
+        var spinner       = confirmBtn  ? confirmBtn.querySelector( '.ha-pf-restore-spinner' )        : null;
+
+        if ( ! restoreBtn || ! fileInput || ! overlay ) return;
+
+        // Open file picker when the Restore button is clicked
+        restoreBtn.addEventListener( 'click', function () {
+            fileInput.value = '';   // reset so same file can be re-selected
+            fileInput.click();
+        } );
+
+        // Once a file is chosen, show the confirmation modal
+        fileInput.addEventListener( 'change', function () {
+            if ( ! fileInput.files || ! fileInput.files[0] ) return;
+            var name = fileInput.files[0].name;
+            if ( filenameEl ) filenameEl.textContent = name;
+            showModal();
+        } );
+
+        // Close modal on Cancel or overlay background click
+        cancelBtn && cancelBtn.addEventListener( 'click', hideModal );
+
+        overlay.addEventListener( 'click', function ( e ) {
+            if ( e.target === overlay ) hideModal();
+        } );
+
+        // Close on Escape key
+        document.addEventListener( 'keydown', function ( e ) {
+            if ( e.key === 'Escape' && overlay.getAttribute( 'aria-hidden' ) === 'false' ) {
+                hideModal();
+            }
+        } );
+
+        // Confirm → upload via FormData AJAX
+        confirmBtn && confirmBtn.addEventListener( 'click', function () {
+            var file = fileInput.files && fileInput.files[0];
+            if ( ! file ) { hideModal(); return; }
+
+            setLoading( true );
+
+            var fd = new FormData();
+            fd.append( 'action',      'ha_pf_import_config_ajax' );
+            fd.append( 'nonce',       haPfAdmin.importNonce );
+            fd.append( 'config_file', file, file.name );
+
+            fetch( haPfAdmin.ajaxUrl, { method: 'POST', body: fd } )
+                .then( function ( r ) { return r.json(); } )
+                .then( function ( data ) {
+                    if ( data.success ) {
+                        // Brief success state then reload so all fields reflect restored values
+                        if ( confirmText ) confirmText.textContent = 'Restored! Reloading…';
+                        if ( confirmIcon ) { confirmIcon.className = 'dashicons dashicons-yes-alt ha-pf-restore-confirm-icon'; }
+                        setTimeout( function () { window.location.reload(); }, 900 );
+                    } else {
+                        var msg = ( data.data && data.data.message ) ? data.data.message : 'An unknown error occurred.';
+                        setLoading( false );
+                        showError( msg );
+                    }
+                } )
+                .catch( function ( err ) {
+                    setLoading( false );
+                    showError( 'Network error: ' + err.message );
+                } );
+        } );
+
+        function showModal() {
+            clearError();
+            overlay.setAttribute( 'aria-hidden', 'false' );
+            overlay.classList.add( 'is-visible' );
+            if ( cancelBtn ) cancelBtn.focus();
+        }
+
+        function hideModal() {
+            overlay.setAttribute( 'aria-hidden', 'true' );
+            overlay.classList.remove( 'is-visible' );
+            setLoading( false );
+            clearError();
+            // Reset confirm button text in case a previous attempt changed it
+            if ( confirmText ) confirmText.textContent = 'Yes, Restore Settings';
+            if ( confirmIcon ) confirmIcon.className = 'dashicons dashicons-yes-alt ha-pf-restore-confirm-icon';
+        }
+
+        function setLoading( on ) {
+            if ( ! confirmBtn ) return;
+            confirmBtn.disabled = on;
+            if ( cancelBtn ) cancelBtn.disabled = on;
+            if ( spinner ) spinner.style.display = on ? 'inline-block' : 'none';
+            if ( confirmIcon ) confirmIcon.style.display = on ? 'none' : '';
+        }
+
+        function showError( msg ) {
+            var existing = overlay.querySelector( '.ha-pf-modal-error' );
+            if ( existing ) existing.remove();
+            var el = document.createElement( 'p' );
+            el.className = 'ha-pf-modal-error';
+            el.textContent = msg;
+            var actions = overlay.querySelector( '.ha-pf-modal-actions' );
+            if ( actions ) actions.parentNode.insertBefore( el, actions );
+        }
+
+        function clearError() {
+            var existing = overlay && overlay.querySelector( '.ha-pf-modal-error' );
+            if ( existing ) existing.remove();
+        }
+
+    }() );
+
 } )( jQuery, haPfAdmin );

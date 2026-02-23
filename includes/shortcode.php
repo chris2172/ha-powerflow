@@ -281,6 +281,35 @@ function ha_pf_shortcode() {
             from { offset-distance: 0%; }
             to   { offset-distance: 100%; }
         }
+
+        /* ── Last-updated status bar ─────────────────── */
+        #ha-pf-status-bar-<?php echo esc_attr( $uid ); ?> {
+            max-width: 1000px;
+            margin: 6px auto 0;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: sans-serif;
+            text-align: right;
+            transition: background 0.4s ease, color 0.4s ease;
+        }
+        #ha-pf-status-bar-<?php echo esc_attr( $uid ); ?>.ha-pf-status-waiting {
+            color: #90A4AE;
+            background: transparent;
+        }
+        #ha-pf-status-bar-<?php echo esc_attr( $uid ); ?>.ha-pf-status-ok {
+            color: #4CAF50;
+            background: transparent;
+        }
+        #ha-pf-status-bar-<?php echo esc_attr( $uid ); ?>.ha-pf-status-warn {
+            color: #F57F17;
+            background: #FFF8E1;
+        }
+        #ha-pf-status-bar-<?php echo esc_attr( $uid ); ?>.ha-pf-status-error {
+            color: #C62828;
+            background: #FFF0F0;
+            font-weight: 600;
+        }
     </style>
 
     <div id="ha-pf-wrapper-<?php echo esc_attr( $uid ); ?>">
@@ -345,6 +374,13 @@ function ha_pf_shortcode() {
         <?php endif; ?>
 
     </svg>
+    </div><!-- /ha-pf-wrapper -->
+
+    <div id="ha-pf-status-bar-<?php echo esc_attr( $uid ); ?>"
+         class="ha-pf-status-bar ha-pf-status-waiting"
+         aria-live="polite"
+         aria-label="<?php esc_attr_e( 'Dashboard data status', 'ha-powerflow' ); ?>">
+        <?php esc_html_e( 'Connecting&hellip;', 'ha-powerflow' ); ?>
     </div>
 
     <script>
@@ -374,7 +410,8 @@ function ha_pf_shortcode() {
         const LABELS       = <?php echo wp_json_encode( $labels ); ?>;
         const POSITIONS    = <?php echo wp_json_encode( $positions ); ?>;
         const CUSTOM_UNITS = <?php echo wp_json_encode( $custom_units ); ?>;
-        const CUSTOM_SIZES = <?php echo wp_json_encode( $custom_sizes ); ?>;
+        const CUSTOM_SIZES       = <?php echo wp_json_encode( $custom_sizes ); ?>;
+        const REFRESH_INTERVAL   = <?php echo (int) max( 5, min( 300, (int) get_option( 'ha_powerflow_refresh_interval', 5 ) ) ); ?>; // seconds
 
         const PATHS = {
             grid: { fwd: <?php echo wp_json_encode( $paths['grid_fwd'] ); ?>,
@@ -834,6 +871,9 @@ function ha_pf_shortcode() {
                 if ( key === 'ev_soc'        && EV      ) evGaugeSoc = data.state;
             }
 
+            // Mark the refresh cycle as successful if any entity returned data
+            markSuccess();
+
             // Update battery gauge if both values were received
             if ( BATTERY_GAUGE && gaugeSoc !== null ) {
                 updateBatteryGauge( gaugeSoc, gaugeWatts !== null ? gaugeWatts : 0 );
@@ -846,12 +886,52 @@ function ha_pf_shortcode() {
         }
 
         // -----------------------------------------------
+        // Last-updated status bar
+        // -----------------------------------------------
+        var lastSuccessTime = null;   // timestamp of last cycle that received any data
+
+        function markSuccess() {
+            lastSuccessTime = Date.now();
+            updateStatusBar();
+        }
+
+        function updateStatusBar() {
+            var bar = document.getElementById( 'ha-pf-status-bar-' + UID );
+            if ( ! bar ) return;
+
+            if ( lastSuccessTime === null ) {
+                bar.textContent  = 'Connecting…';
+                bar.className    = 'ha-pf-status-bar ha-pf-status-waiting';
+                return;
+            }
+
+            var age     = Math.floor( ( Date.now() - lastSuccessTime ) / 1000 );
+            var stale1  = REFRESH_INTERVAL * 2;   // amber threshold
+            var stale2  = REFRESH_INTERVAL * 3;   // red threshold
+
+            if ( age < stale1 ) {
+                var ageStr = age < 5 ? 'just now' : age + ' second' + ( age === 1 ? '' : 's' ) + ' ago';
+                bar.textContent = 'Last updated: ' + ageStr;
+                bar.className   = 'ha-pf-status-bar ha-pf-status-ok';
+            } else if ( age < stale2 ) {
+                bar.textContent = 'Last updated: ' + age + 's ago — connection may be slow';
+                bar.className   = 'ha-pf-status-bar ha-pf-status-warn';
+            } else {
+                bar.textContent = 'Connection lost — last data ' + age + 's ago';
+                bar.className   = 'ha-pf-status-bar ha-pf-status-error';
+            }
+        }
+
+        // Tick the status bar every second regardless of refresh interval
+        setInterval( updateStatusBar, 1000 );
+
+        // -----------------------------------------------
         // Boot
         // -----------------------------------------------
         createLabels();
         positionLabels();
         updateAll();
-        setInterval( updateAll, 5000 );
+        setInterval( updateAll, REFRESH_INTERVAL * 1000 );
 
         // -----------------------------------------------
         // Click-to-coordinate tool

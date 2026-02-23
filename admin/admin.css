@@ -1075,3 +1075,235 @@
         gap: 4px;
     }
 }
+
+/* ─────────────────────────────────────────────────────
+   Config restore: Restore button in save bar
+   ───────────────────────────────────────────────────── */
+
+.ha-pf-restore-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12px;
+    border-color: var(--ha-pf-border);
+    color: var(--ha-pf-text-muted);
+    background: transparent;
+    transition: border-color var(--ha-pf-transition), color var(--ha-pf-transition), background var(--ha-pf-transition);
+}
+
+.ha-pf-restore-btn:hover {
+    border-color: var(--ha-pf-text-muted);
+    color: var(--ha-pf-text);
+    background: var(--ha-pf-bg);
+}
+
+.ha-pf-save-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+/* ─────────────────────────────────────────────────────
+   Config restore: Modal overlay
+   ───────────────────────────────────────────────────── */
+
+.ha-pf-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+    backdrop-filter: blur(2px);
+}
+
+.ha-pf-overlay.is-visible {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.ha-pf-modal {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28), 0 4px 16px rgba(0, 0, 0, 0.12);
+    padding: 40px 40px 32px;
+    max-width: 520px;
+    width: calc(100% - 48px);
+    text-align: center;
+    transform: translateY(8px) scale(0.98);
+    transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.ha-pf-overlay.is-visible .ha-pf-modal {
+    transform: translateY(0) scale(1);
+}
+
+.ha-pf-modal-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #FFF8E1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+}
+
+.ha-pf-modal-icon .dashicons {
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+    color: #F57F17;
+}
+
+.ha-pf-modal h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ha-pf-text, #1a1a2e);
+    margin: 0 0 12px;
+    padding: 0;
+    border: none;
+}
+
+.ha-pf-modal-file {
+    display: inline-block;
+    background: var(--ha-pf-bg, #f8f9fa);
+    border: 1px solid var(--ha-pf-border, #dee2e6);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: var(--ha-pf-green, #5EC766);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 20px;
+}
+
+.ha-pf-modal-body {
+    font-size: 14px;
+    color: var(--ha-pf-text-muted, #6b7280);
+    line-height: 1.6;
+    margin: 0 0 12px;
+    text-align: left;
+}
+
+.ha-pf-modal-body strong {
+    color: var(--ha-pf-text, #1a1a2e);
+}
+
+.ha-pf-modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid var(--ha-pf-border, #dee2e6);
+}
+
+.ha-pf-restore-confirm-btn {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 6px;
+    background: #d32f2f !important;
+    border-color: #c62828 !important;
+    box-shadow: none !important;
+    transition: background var(--ha-pf-transition, 0.15s ease) !important;
+}
+
+.ha-pf-restore-confirm-btn:hover:not(:disabled) {
+    background: #b71c1c !important;
+    border-color: #b71c1c !important;
+}
+
+.ha-pf-restore-confirm-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.ha-pf-restore-confirm-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+}
+
+.ha-pf-modal-error {
+    background: #FFF0F0;
+    border: 1px solid #F5C6CB;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #c0392b;
+    text-align: left;
+    margin: 16px 0 0;
+}
+
+/* ─────────────────────────────────────────────────────
+   Test connection button & result chip
+   ───────────────────────────────────────────────────── */
+
+.ha-pf-test-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ha-pf-test-spinner {
+    animation: ha-pf-spin 0.8s linear infinite;
+}
+
+@keyframes ha-pf-spin {
+    to { transform: rotate(360deg); }
+}
+
+.ha-pf-test-result {
+    display: inline-block;
+    margin-left: 10px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    vertical-align: middle;
+    transition: all 0.2s ease;
+}
+
+.ha-pf-test-result:empty {
+    display: none;
+}
+
+.ha-pf-test-success {
+    background: #E8F5E9;
+    color: #2E7D32;
+    border: 1px solid #A5D6A7;
+}
+
+.ha-pf-test-success::before {
+    content: '✓  ';
+    font-weight: 700;
+}
+
+.ha-pf-test-error {
+    background: #FFF0F0;
+    color: #C62828;
+    border: 1px solid #FFCDD2;
+}
+
+.ha-pf-test-error::before {
+    content: '✕  ';
+    font-weight: 700;
+}
+
+.ha-pf-test-loading {
+    background: var(--ha-pf-bg, #f8f9fa);
+    color: var(--ha-pf-text-muted, #6b7280);
+    border: 1px solid var(--ha-pf-border, #dee2e6);
+}

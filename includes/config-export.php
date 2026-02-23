@@ -169,6 +169,7 @@ function ha_pf_build_yaml() {
     $lines[] = '  ha_url: '   . ha_pf_yaml_scalar( get_option( 'ha_powerflow_ha_url', '' ) );
     $lines[] = '  ha_token: ' . ha_pf_yaml_scalar( $encrypted_token );
     $lines[] = '  ssl_verify: ' . ( $opt( 'ssl_verify', '1' ) === '1' ? 'true' : 'false' );
+    $lines[] = '  refresh_interval: ' . (int) max( 5, min( 300, (int) $opt( 'refresh_interval', '5' ) ) );
     $lines[] = '';
 
     // ---- features ------------------------------------
@@ -338,6 +339,12 @@ function ha_pf_import_config( $yaml_string ) {
         if ( isset( $conn['ssl_verify'] ) ) {
             update_option( 'ha_powerflow_ssl_verify', $conn['ssl_verify'] ? '1' : '0' );
         }
+        if ( isset( $conn['refresh_interval'] ) ) {
+            $ri = (int) $conn['refresh_interval'];
+            if ( $ri < 5   ) $ri = 5;
+            if ( $ri > 300 ) $ri = 300;
+            update_option( 'ha_powerflow_refresh_interval', $ri );
+        }
     }
 
     // Features
@@ -454,6 +461,63 @@ function ha_pf_import_config( $yaml_string ) {
 }
 
 // -------------------------------------------------------
+// AJAX handler: import a config file uploaded from the browser
+// -------------------------------------------------------
+add_action( 'wp_ajax_ha_pf_import_config_ajax', 'ha_pf_ajax_import_config' );
+
+function ha_pf_ajax_import_config() {
+
+    // --- 1. Verify nonce and capability ---
+    if ( ! check_ajax_referer( 'ha_pf_import_config', 'nonce', false ) ) {
+        wp_send_json_error( [ 'message' => 'Invalid security token. Please refresh the page and try again.' ] );
+    }
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( [ 'message' => 'You do not have permission to import settings.' ] );
+    }
+
+    // --- 2. Check a file was actually uploaded ---
+    if ( empty( $_FILES['config_file'] ) || $_FILES['config_file']['error'] !== UPLOAD_ERR_OK ) {
+        $code = isset( $_FILES['config_file'] ) ? $_FILES['config_file']['error'] : -1;
+        wp_send_json_error( [ 'message' => 'File upload failed (code ' . intval( $code ) . '). Check your server upload_max_filesize setting.' ] );
+    }
+
+    $file = $_FILES['config_file'];
+
+    // --- 3. Sanity checks on the uploaded file ---
+    if ( $file['size'] > 512 * 1024 ) {  // 512 KB max — a valid config is < 10 KB
+        wp_send_json_error( [ 'message' => 'File is too large. A valid HA PowerFlow config file should be under 512 KB.' ] );
+    }
+
+    $ext = strtolower( pathinfo( sanitize_file_name( $file['name'] ), PATHINFO_EXTENSION ) );
+    if ( ! in_array( $ext, [ 'yaml', 'yml' ], true ) ) {
+        wp_send_json_error( [ 'message' => 'Only .yaml or .yml files are accepted.' ] );
+    }
+
+    // --- 4. Read the file ---
+    $yaml = file_get_contents( $file['tmp_name'] );
+    if ( $yaml === false ) {
+        wp_send_json_error( [ 'message' => 'Could not read the uploaded file.' ] );
+    }
+
+    // Sanity-check it looks like one of our files
+    if ( strpos( $yaml, 'meta:' ) === false || strpos( $yaml, 'connection:' ) === false ) {
+        wp_send_json_error( [ 'message' => 'This does not appear to be a valid HA PowerFlow config file.' ] );
+    }
+
+    // --- 5. Import ---
+    $result = ha_pf_import_config( $yaml );
+
+    if ( is_wp_error( $result ) ) {
+        wp_send_json_error( [ 'message' => $result->get_error_message() ] );
+    }
+
+    // --- 6. Write a fresh snapshot so the restore is itself backed up ---
+    ha_pf_write_config_snapshot();
+
+    wp_send_json_success( [ 'message' => 'Settings restored successfully.' ] );
+}
+
+// -------------------------------------------------------
 // Minimal YAML parser
 //
 // Handles the specific subset of YAML this plugin writes:
@@ -469,9 +533,11 @@ function ha_pf_import_config( $yaml_string ) {
 // while remaining fully compatible with the files we write.
 // -------------------------------------------------------
 function ha_pf_parse_yaml( $yaml_string ) {
-    $lines  = explode( "\n", $yaml_string );
-    $result = [];
-    $path   = [];   // current nesting path, e.g. ['connection'] or ['entities', 'grid_power']
+    $lines           = explode( "\n", $yaml_string );
+    $result          = [];
+    $path            = [];   // current nesting path, e.g. ['connection'] or ['entities','grid_power']
+    $list_depth      = -1;   // indent-depth at which the current list lives (-1 = not in a list)
+    $list_item_index = -1;   // index of the current list item within that list
 
     foreach ( $lines as $raw ) {
 
@@ -479,32 +545,62 @@ function ha_pf_parse_yaml( $yaml_string ) {
         $line = rtrim( $raw );
         if ( $line === '' || ltrim( $line )[0] === '#' ) continue;
 
-        // Measure indent
-        $indent = strlen( $line ) - strlen( ltrim( $line ) );
-        $line   = ltrim( $line );
+        // Measure indent (spaces only — our writer uses 2-space indents)
+        $indent  = strlen( $line ) - strlen( ltrim( $line ) );
+        $trimmed = ltrim( $line );
 
-        // Parse  key: value  or  key:
-        if ( ! preg_match( '/^([a-zA-Z0-9_]+)\s*:\s*(.*)$/', $line, $m ) ) continue;
+        // ── Empty-list shorthand: "  []" ──────────────────────────────────
+        // Written for sections with no items. The parent key was already set
+        // to [] when its "key:" line was processed, so nothing to do here.
+        if ( $trimmed === '[]' ) continue;
+
+        // ── List item: line beginning with "- " ───────────────────────────
+        if ( substr( $trimmed, 0, 2 ) === '- ' ) {
+            $depth = intval( $indent / 2 );
+
+            // Start a new item counter or advance the existing one
+            if ( $list_depth !== $depth ) {
+                $list_depth      = $depth;
+                $list_item_index = 0;
+            } else {
+                $list_item_index++;
+            }
+
+            // Update $path so it points to this list item:
+            // slice back to the parent level and append the numeric index.
+            $path = array_slice( $path, 0, $depth );
+            $path[] = $list_item_index;
+
+            // Parse the  key: value  that follows the "- " on the same line
+            $item_content = substr( $trimmed, 2 );
+            if ( preg_match( '/^([a-zA-Z0-9_]+)\s*:\s*(.*)$/', $item_content, $m ) ) {
+                $key     = $m[1];
+                $decoded = ha_pf_yaml_decode_scalar( trim( $m[2] ) );
+                ha_pf_yaml_set( $result, array_merge( $path, [ $key ] ), $decoded );
+            }
+            continue;
+        }
+
+        // ── Regular  key: value  or  key:  (parent) ───────────────────────
+        if ( ! preg_match( '/^([a-zA-Z0-9_]+)\s*:\s*(.*)$/', $trimmed, $m ) ) continue;
 
         $key   = $m[1];
         $value = trim( $m[2] );
 
-        // Decode the value
         if ( $value === '' ) {
-            // No value — this is a parent key; push onto path
-            $depth = intval( $indent / 2 );
-            $path  = array_slice( $path, 0, $depth );
-            $path[] = $key;
-            // Ensure the nested array exists
+            // Parent key — push onto path and reset list tracking
+            $depth           = intval( $indent / 2 );
+            $path            = array_slice( $path, 0, $depth );
+            $path[]          = $key;
+            $list_depth      = -1;
+            $list_item_index = -1;
             ha_pf_yaml_set( $result, $path, [] );
             continue;
         }
 
-        // Decode scalar value
-        $decoded = ha_pf_yaml_decode_scalar( $value );
-
-        // Work out depth from indent
-        $depth = intval( $indent / 2 );
+        // Scalar value — write at current depth
+        $decoded      = ha_pf_yaml_decode_scalar( $value );
+        $depth        = intval( $indent / 2 );
         $current_path = array_slice( $path, 0, $depth );
         $current_path[] = $key;
 

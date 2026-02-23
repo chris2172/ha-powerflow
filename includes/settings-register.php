@@ -22,6 +22,18 @@ function ha_pf_register_settings() {
     register_setting( $group, 'ha_powerflow_ha_token', [ 'sanitize_callback' => 'sanitize_text_field' ] );
 
     // --------------------------------------------------
+    // Refresh interval (seconds, 5–300, default 5)
+    // --------------------------------------------------
+    register_setting( $group, 'ha_powerflow_refresh_interval', [
+        'sanitize_callback' => function( $v ) {
+            $v = absint( $v );
+            if ( $v < 5   ) $v = 5;
+            if ( $v > 300 ) $v = 300;
+            return $v;
+        },
+    ] );
+
+    // --------------------------------------------------
     // Feature toggles
     // --------------------------------------------------
     foreach ( [ 'enable_solar', 'enable_battery', 'enable_ev' ] as $toggle ) {

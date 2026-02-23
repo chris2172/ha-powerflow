@@ -240,6 +240,41 @@ function ha_pf_settings_page() {
                                         </label>
                                     </td>
                                 </tr>
+
+                                <tr>
+                                    <th scope="row"><?php esc_html_e( 'Refresh Interval', 'ha-powerflow' ); ?></th>
+                                    <td>
+                                        <select name="ha_powerflow_refresh_interval" id="ha_pf_refresh_interval">
+                                            <?php
+                                            $saved_interval = (int) get_option( 'ha_powerflow_refresh_interval', 5 );
+                                            foreach ( [ 5, 10, 15, 30, 60, 120, 300 ] as $secs ) :
+                                                $label = $secs >= 60
+                                                    ? ( $secs / 60 ) . ' ' . _n( 'minute', 'minutes', $secs / 60, 'ha-powerflow' )
+                                                    : $secs . ' ' . _n( 'second', 'seconds', $secs, 'ha-powerflow' );
+                                            ?>
+                                            <option value="<?php echo esc_attr( $secs ); ?>"
+                                                <?php selected( $saved_interval, $secs ); ?>>
+                                                <?php echo esc_html( $label ); ?>
+                                            </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <p class="description"><?php esc_html_e( 'How often the dashboard fetches new data from Home Assistant.', 'ha-powerflow' ); ?></p>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th scope="row"><?php esc_html_e( 'Test Connection', 'ha-powerflow' ); ?></th>
+                                    <td>
+                                        <button type="button" id="ha-pf-test-btn" class="button ha-pf-test-btn">
+                                            <span class="dashicons dashicons-update ha-pf-test-spinner" style="display:none;"></span>
+                                            <span class="dashicons dashicons-wifi ha-pf-test-icon"></span>
+                                            <?php esc_html_e( 'Test Connection', 'ha-powerflow' ); ?>
+                                        </button>
+                                        <span id="ha-pf-test-result" class="ha-pf-test-result" aria-live="polite"></span>
+                                        <p class="description"><?php esc_html_e( 'Tests the saved URL and token. Save Settings first if you have made changes.', 'ha-powerflow' ); ?></p>
+                                    </td>
+                                </tr>
+
                             </table>
                         </div>
                     </div>
@@ -635,7 +670,7 @@ function ha_pf_settings_page() {
             </div><!-- /advanced grid -->
 
             <!-- ══════════════════════════════════════════
-                 STICKY SAVE BAR
+                 STICKY SAVE BAR (inside the form so Save works)
                  ══════════════════════════════════════════ -->
             <div class="ha-pf-save-bar">
                 <div class="ha-pf-save-bar-left">
@@ -646,6 +681,10 @@ function ha_pf_settings_page() {
                     <span id="ha-pf-config-note">
                         <?php esc_html_e( 'A config snapshot is saved automatically on every save.', 'ha-powerflow' ); ?>
                     </span>
+                    <button type="button" id="ha-pf-restore-btn" class="button ha-pf-restore-btn">
+                        <span class="dashicons dashicons-upload" style="margin-top:3px;margin-right:4px;"></span>
+                        <?php esc_html_e( 'Restore from Backup&hellip;', 'ha-powerflow' ); ?>
+                    </button>
                 </div>
                 <?php submit_button(
                     __( 'Save Settings', 'ha-powerflow' ),
@@ -656,7 +695,60 @@ function ha_pf_settings_page() {
                 ); ?>
             </div>
 
-        </form>
+        </form><!-- /options.php form -->
+
+        <!-- File input is intentionally OUTSIDE the form so it never submits through options.php -->
+        <input type="file"
+               id="ha-pf-import-file"
+               accept=".yaml,.yml"
+               style="display:none;"
+               aria-hidden="true">
+
+    <!-- ══════════════════════════════════════════════
+         CONFIG RESTORE MODAL
+         ══════════════════════════════════════════════ -->
+    <div id="ha-pf-restore-overlay" class="ha-pf-overlay" aria-hidden="true" role="dialog"
+         aria-modal="true" aria-labelledby="ha-pf-restore-modal-title">
+        <div class="ha-pf-modal">
+
+            <div class="ha-pf-modal-icon">
+                <span class="dashicons dashicons-warning"></span>
+            </div>
+
+            <h2 id="ha-pf-restore-modal-title">
+                <?php esc_html_e( 'Restore Settings?', 'ha-powerflow' ); ?>
+            </h2>
+
+            <p class="ha-pf-modal-file" id="ha-pf-restore-filename"></p>
+
+            <p class="ha-pf-modal-body">
+                <?php esc_html_e(
+                    'This will overwrite ALL current settings — connection details, entity IDs, positions, appearance, custom entities, and gauge configuration — with the values from the selected backup file.',
+                    'ha-powerflow'
+                ); ?>
+            </p>
+
+            <p class="ha-pf-modal-body">
+                <strong><?php esc_html_e( 'This action cannot be undone.', 'ha-powerflow' ); ?></strong>
+                <?php esc_html_e( 'Your current settings will be saved as a backup snapshot before the restore begins.', 'ha-powerflow' ); ?>
+            </p>
+
+            <div class="ha-pf-modal-actions">
+                <button type="button" id="ha-pf-restore-cancel" class="button button-large">
+                    <?php esc_html_e( 'Cancel', 'ha-powerflow' ); ?>
+                </button>
+                <button type="button" id="ha-pf-restore-confirm" class="button button-primary button-large ha-pf-restore-confirm-btn">
+                    <span class="ha-pf-restore-confirm-icon dashicons dashicons-yes-alt"></span>
+                    <span class="ha-pf-restore-confirm-text">
+                        <?php esc_html_e( 'Yes, Restore Settings', 'ha-powerflow' ); ?>
+                    </span>
+                    <span class="ha-pf-restore-spinner spinner" style="display:none;float:none;vertical-align:middle;"></span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
     </div><!-- /wrap -->
     <?php
 }

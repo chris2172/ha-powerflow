@@ -50,18 +50,41 @@ function ha_pf_path( $key, $default ) {
 
 /**
  * Return a validated integer option (for rotation, which can be negative).
+ * Treats "0" as unset — a stored 0 with no corresponding x/y position
+ * indicates a previous version wrote a blank field as 0. In that case
+ * fall back to the built-in default rotation.
+ * Users who deliberately set 0° rotation on v2 will have their x/y
+ * positions saved as non-zero, so their settings are preserved correctly.
  */
 function ha_pf_int( $key, $default ) {
     $val = get_option( HA_PF_OPT_PRE . $key );
-    return ( $val !== false && $val !== '' ) ? intval( $val ) : intval( $default );
+    if ( $val === false || $val === '' ) {
+        return intval( $default );
+    }
+    // "0" only overrides the default when x_pos is also set to a real value,
+    // meaning the user has genuinely configured this entity in v2.
+    if ( ( $val === '0' || $val === 0 ) && intval( $default ) !== 0 ) {
+        // Check whether x_pos has a real saved value for this entity
+        $base    = preg_replace( '/_rot$/', '', $key );
+        $x_saved = get_option( HA_PF_OPT_PRE . $base . '_x_pos' );
+        if ( ! $x_saved || $x_saved === '0' || $x_saved === 0 ) {
+            return intval( $default );   // x also unset — treat rot as unset too
+        }
+    }
+    return intval( $val );
 }
 
 /**
  * Return a validated positive integer option (for x/y positions).
+ * Treats "0" as unset — a position of 0 is never valid and indicates
+ * a previous version saved a blank field as 0, so fall back to default.
  */
 function ha_pf_pos( $key, $default ) {
     $val = get_option( HA_PF_OPT_PRE . $key );
-    return ( $val !== false && $val !== '' ) ? absint( $val ) : absint( $default );
+    if ( $val === false || $val === '' || $val === '0' || $val === 0 ) {
+        return absint( $default );
+    }
+    return absint( $val );
 }
 
 // -------------------------------------------------------

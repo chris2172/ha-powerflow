@@ -210,7 +210,15 @@ function ha_pf_build_yaml() {
 
     // ---- preferences ---------------------------------
     $lines[] = 'preferences:';
-    $lines[] = '  delete_uploads: ' . ( $opt( 'delete_uploads' ) === '1' ? 'true' : 'false' );
+    $lines[] = '  delete_uploads: '  . ( $opt( 'delete_uploads' ) === '1' ? 'true' : 'false' );
+    $lines[] = '  debug_click: '     . ( $opt( 'debug_click'    ) === '1' ? 'true' : 'false' );
+    $lines[] = '';
+
+    // ---- battery_gauge -------------------------------
+    $lines[] = 'battery_gauge:';
+    $lines[] = '  enable: ' . ( $opt( 'battery_gauge_enable' ) === '1' ? 'true' : 'false' );
+    $lines[] = '  x: '     . absint( $opt( 'battery_gauge_x', '95'  ) );
+    $lines[] = '  y: '     . absint( $opt( 'battery_gauge_y', '605' ) );
 
     return implode( "\n", $lines ) . "\n";
 }
@@ -356,6 +364,23 @@ function ha_pf_import_config( $yaml_string ) {
         $prefs = $data['preferences'];
         if ( isset( $prefs['delete_uploads'] ) ) {
             update_option( 'ha_powerflow_delete_uploads', $prefs['delete_uploads'] ? '1' : '0' );
+        }
+        if ( isset( $prefs['debug_click'] ) ) {
+            update_option( 'ha_powerflow_debug_click', $prefs['debug_click'] ? '1' : '0' );
+        }
+    }
+
+    // Battery gauge
+    if ( isset( $data['battery_gauge'] ) ) {
+        $gauge = $data['battery_gauge'];
+        if ( isset( $gauge['enable'] ) ) {
+            update_option( 'ha_powerflow_battery_gauge_enable', $gauge['enable'] ? '1' : '0' );
+        }
+        if ( isset( $gauge['x'] ) ) {
+            update_option( 'ha_powerflow_battery_gauge_x', absint( $gauge['x'] ) );
+        }
+        if ( isset( $gauge['y'] ) ) {
+            update_option( 'ha_powerflow_battery_gauge_y', absint( $gauge['y'] ) );
         }
     }
 

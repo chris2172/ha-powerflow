@@ -80,8 +80,8 @@ function ha_pf_shortcode() {
 
     // Battery gauge widget
     $bat_gauge        = ( ha_pf_opt( 'battery_gauge_enable' ) === '1' ) && $battery;
-    $bat_gauge_x      = ha_pf_pos( 'battery_gauge_x', 500 );
-    $bat_gauge_y      = ha_pf_pos( 'battery_gauge_y', 375 );
+    $bat_gauge_x      = ha_pf_pos( 'battery_gauge_x', 95  );
+    $bat_gauge_y      = ha_pf_pos( 'battery_gauge_y', 605 );
 
     // Background image
     $default_img = HA_PF_URL . 'assets/ha-powerflow.png';

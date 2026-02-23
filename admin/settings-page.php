@@ -322,15 +322,15 @@ function ha_pf_settings_page() {
                                     <span class="ha-pf-coord-label">X</span>
                                     <input type="number" min="0" max="1000"
                                         name="ha_powerflow_battery_gauge_x"
-                                        value="<?php echo esc_attr( get_option( 'ha_powerflow_battery_gauge_x', '500' ) ); ?>"
-                                        placeholder="500">
+                                        value="<?php echo esc_attr( get_option( 'ha_powerflow_battery_gauge_x', '95' ) ); ?>"
+                                        placeholder="95">
                                 </div>
                                 <div class="ha-pf-coord-group">
                                     <span class="ha-pf-coord-label">Y</span>
                                     <input type="number" min="0" max="750"
                                         name="ha_powerflow_battery_gauge_y"
-                                        value="<?php echo esc_attr( get_option( 'ha_powerflow_battery_gauge_y', '375' ) ); ?>"
-                                        placeholder="375">
+                                        value="<?php echo esc_attr( get_option( 'ha_powerflow_battery_gauge_y', '605' ) ); ?>"
+                                        placeholder="605">
                                 </div>
                             </div>
                         </div>

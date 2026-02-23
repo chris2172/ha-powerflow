@@ -97,8 +97,3 @@ Adds automatic config backups and the click-to-coordinate positioning tool. Reco
 
 = 2.0.0 =
 Major security rewrite. Upgrade strongly recommended.
-
-= 2.1.0 =
-Add Battery Gauge.
-Add location selector to Settings page.
-Add Visibility checkbox to settings page.

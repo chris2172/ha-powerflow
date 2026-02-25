@@ -16,107 +16,111 @@ add_shortcode( 'ha_powerflow', 'ha_pf_shortcode' );
 // -------------------------------------------------------
 
 /**
- * Return a saved option value, or $default if not set / empty.
- * Uses WordPress's built-in object cache automatically.
+ * Return an option from a named config array or (when null) the global WP option.
+ *
+ * @param string     $key         Option key without the ha_powerflow_ prefix.
+ * @param string     $default     Fallback when the value is absent or empty.
+ * @param array|null $cfg         Named config array, or null for global options.
  */
-function ha_pf_opt( $key, $default = '' ) {
-    $val = get_option( HA_PF_OPT_PRE . $key );
-    return ( $val !== false && $val !== '' ) ? $val : $default;
+function ha_pf_opt( string $key, string $default = '', ?array $cfg = null ): string {
+    if ( $cfg !== null ) {
+        $v = $cfg[ $key ] ?? null;
+        return ( $v !== null && $v !== '' ) ? (string) $v : $default;
+    }
+    $v = get_option( HA_PF_OPT_PRE . $key );
+    return ( $v !== false && $v !== '' ) ? (string) $v : $default;
 }
 
 /**
- * Return a validated SVG path string from the database, or $default.
- * Must start with M/m and contain only legal SVG path characters.
+ * Validated SVG path from a named config or the global option.
  */
-function ha_pf_path( $key, $default ) {
-    $val = trim( (string) get_option( HA_PF_OPT_PRE . $key ) );
-
-    if ( $val === '' ) {
-        return $default;
-    }
-
-    // Must start with a Move-to command
-    if ( ! preg_match( '/^[Mm]/', $val ) ) {
-        return $default;
-    }
-
-    // Must contain only SVG path characters
-    if ( ! preg_match( '/^[MmLlHhVvCcSsQqTtAaZz0-9\s,.\-]+$/', $val ) ) {
-        return $default;
-    }
-
-    return $val;
+function ha_pf_path( string $key, string $default, ?array $cfg = null ): string {
+    $v = trim( ha_pf_opt( $key, '', $cfg ) );
+    if ( $v === '' ) return $default;
+    if ( ! preg_match( '/^[Mm]/', $v ) ) return $default;
+    if ( ! preg_match( '/^[MmLlHhVvCcSsQqTtAaZz0-9\\s,.\\-]+$/', $v ) ) return $default;
+    return $v;
 }
 
 /**
- * Return a validated integer option (for rotation, which can be negative).
- * Treats "0" as unset — a stored 0 with no corresponding x/y position
- * indicates a previous version wrote a blank field as 0. In that case
- * fall back to the built-in default rotation.
- * Users who deliberately set 0° rotation on v2 will have their x/y
- * positions saved as non-zero, so their settings are preserved correctly.
+ * Validated signed integer (rotation) from a named config or the global option.
+ * For named configs every field is explicitly stored, so no legacy 0-as-unset logic.
+ * For global options the original v1→v2 fallback is preserved.
  */
-function ha_pf_int( $key, $default ) {
-    $val = get_option( HA_PF_OPT_PRE . $key );
-    if ( $val === false || $val === '' ) {
-        return intval( $default );
+function ha_pf_int( string $key, int $default, ?array $cfg = null ): int {
+    if ( $cfg !== null ) {
+        $v = $cfg[ $key ] ?? null;
+        return ( $v !== null && $v !== '' ) ? intval( $v ) : $default;
     }
-    // "0" only overrides the default when x_pos is also set to a real value,
-    // meaning the user has genuinely configured this entity in v2.
-    if ( ( $val === '0' || $val === 0 ) && intval( $default ) !== 0 ) {
-        // Check whether x_pos has a real saved value for this entity
+    $v = get_option( HA_PF_OPT_PRE . $key );
+    if ( $v === false || $v === '' ) return $default;
+    if ( ( $v === '0' || $v === 0 ) && $default !== 0 ) {
         $base    = preg_replace( '/_rot$/', '', $key );
         $x_saved = get_option( HA_PF_OPT_PRE . $base . '_x_pos' );
-        if ( ! $x_saved || $x_saved === '0' || $x_saved === 0 ) {
-            return intval( $default );   // x also unset — treat rot as unset too
-        }
+        if ( ! $x_saved || $x_saved === '0' || $x_saved === 0 ) return $default;
     }
-    return intval( $val );
+    return intval( $v );
 }
 
 /**
- * Return a validated positive integer option (for x/y positions).
- * Treats "0" as unset — a position of 0 is never valid and indicates
- * a previous version saved a blank field as 0, so fall back to default.
+ * Validated unsigned integer (x/y position) from a named config or the global option.
  */
-function ha_pf_pos( $key, $default ) {
-    $val = get_option( HA_PF_OPT_PRE . $key );
-    if ( $val === false || $val === '' || $val === '0' || $val === 0 ) {
-        return absint( $default );
+function ha_pf_pos( string $key, int $default, ?array $cfg = null ): int {
+    if ( $cfg !== null ) {
+        $v = $cfg[ $key ] ?? null;
+        if ( $v === null || $v === '' || $v === '0' || $v === 0 ) return $default;
+        return absint( $v );
     }
-    return absint( $val );
+    $v = get_option( HA_PF_OPT_PRE . $key );
+    if ( $v === false || $v === '' || $v === '0' || $v === 0 ) return $default;
+    return absint( $v );
 }
 
 // -------------------------------------------------------
 // Shortcode
 // -------------------------------------------------------
 
-function ha_pf_shortcode() {
+function ha_pf_shortcode( array $atts = [] ): string {
+
+    // ── Resolve config source ─────────────────────────────────────────────────
+    // [ha_powerflow config="slug"] loads a named config; omitting the attribute
+    // (or using an unknown slug) falls back silently to the global settings.
+    $atts = shortcode_atts( [ 'config' => '' ], $atts, 'ha_powerflow' );
+    $cfg  = null;   // null = use global WP options
+    $cfg_slug = sanitize_key( $atts['config'] );
+    if ( $cfg_slug !== '' ) {
+        $found = ha_pf_nc_get_config( $cfg_slug );
+        if ( $found !== null ) {
+            $cfg = $found;
+        }
+    }
 
     // Unique ID so multiple shortcodes on one page don't clash
     $uid = 'ha_pf_' . wp_unique_id();
 
     // Feature toggles
-    $solar   = ( ha_pf_opt( 'enable_solar' )   === '1' );
-    $battery = ( ha_pf_opt( 'enable_battery' ) === '1' );
-    $ev      = ( ha_pf_opt( 'enable_ev' )      === '1' );
+    $solar   = ( ha_pf_opt( 'enable_solar',   '0', $cfg ) === '1' );
+    $battery = ( ha_pf_opt( 'enable_battery', '0', $cfg ) === '1' );
+    $ev      = ( ha_pf_opt( 'enable_ev',      '0', $cfg ) === '1' );
 
     // Grid export is only relevant when solar or battery is enabled —
     // without generation a user cannot export energy to the grid.
     $grid_export = $solar || $battery;
 
     // Battery gauge widget
-    $bat_gauge        = ( ha_pf_opt( 'battery_gauge_enable' ) === '1' ) && $battery;
-    $bat_gauge_x      = ha_pf_pos( 'battery_gauge_x', 95  );
-    $bat_gauge_y      = ha_pf_pos( 'battery_gauge_y', 605 );
+    $bat_gauge        = ( ha_pf_opt( 'battery_gauge_enable', '0', $cfg ) === '1' ) && $battery;
+    $bat_gauge_x      = ha_pf_pos( 'battery_gauge_x', 95,  $cfg );
+    $bat_gauge_y      = ha_pf_pos( 'battery_gauge_y', 605, $cfg );
 
     // EV gauge widget
-    $ev_gauge         = ( ha_pf_opt( 'ev_gauge_enable' ) === '1' ) && $ev;
-    $ev_gauge_x       = ha_pf_pos( 'ev_gauge_x', 500 );
-    $ev_gauge_y       = ha_pf_pos( 'ev_gauge_y', 375 );
+    $ev_gauge         = ( ha_pf_opt( 'ev_gauge_enable', '0', $cfg ) === '1' ) && $ev;
+    $ev_gauge_x       = ha_pf_pos( 'ev_gauge_x', 500, $cfg );
+    $ev_gauge_y       = ha_pf_pos( 'ev_gauge_y', 375, $cfg );
 
     // Custom entities — JSON blob, filtered to visible only for front end
-    $custom_raw  = get_option( 'ha_powerflow_custom_entities', '[]' );
+    $custom_raw  = ( $cfg !== null )
+        ? ( $cfg['custom_entities'] ?? '[]' )
+        : ( get_option( 'ha_powerflow_custom_entities', '[]' ) ?: '[]' );
     $custom_all  = json_decode( $custom_raw ?: '[]', true );
     if ( ! is_array( $custom_all ) ) $custom_all = [];
     // Only pass visible ones to JS; build keyed arrays for labels/positions/units
@@ -141,28 +145,28 @@ function ha_pf_shortcode() {
 
     // Background image
     $default_img = HA_PF_URL . 'assets/ha-powerflow.png';
-    $image_url   = ha_pf_opt( 'image_url', $default_img );
+    $image_url   = ha_pf_opt( 'image_url', $default_img, $cfg );
     if ( ! $image_url ) {
         $image_url = $default_img;
     }
 
     // Colours (already validated in settings-register.php)
-    $text_colour = ha_pf_opt( 'text_colour', '#5EC766' );
-    $line_colour = ha_pf_opt( 'line_colour', '#5EC766' );
-    $dot_colour  = ha_pf_opt( 'dot_colour',  '#5EC766' );
+    $text_colour = ha_pf_opt( 'text_colour', '#5EC766', $cfg );
+    $line_colour = ha_pf_opt( 'line_colour', '#5EC766', $cfg );
+    $dot_colour  = ha_pf_opt( 'dot_colour',  '#5EC766', $cfg );
 
     // SVG flow paths — saved value or built-in default
     $paths = [
-        'grid_fwd' => ha_pf_path( 'grid_flow_forward',    'M 787 366 L 805 375 L 633 439' ),
-        'grid_rev' => ha_pf_path( 'grid_flow_reverse',    'M 633 439 L 805 375 L 787 366' ),
-        'load_fwd' => ha_pf_path( 'load_flow_forward',    'M 590 427 L 673 396 L 612 369' ),
-        'load_rev' => ha_pf_path( 'load_flow_reverse',    'M 590 427 L 673 396 L 612 369' ),
-        'pv_fwd'   => ha_pf_path( 'pv_flow_forward',      'M 331 417 L 510 486' ),
-        'pv_rev'   => ha_pf_path( 'pv_flow_reverse',      'M 510 486 L 331 417' ),
-        'bat_fwd'  => ha_pf_path( 'battery_flow_forward', 'M 532 500 L 364 563' ),
-        'bat_rev'  => ha_pf_path( 'battery_flow_reverse', 'M 364 563 L 532 500' ),
-        'ev_fwd'   => ha_pf_path( 'ev_flow_forward',      'M 618 497 L 713 532 L 786 499' ),
-        'ev_rev'   => ha_pf_path( 'ev_flow_reverse',      'M 786 499 L 713 532 L 618 497' ),
+        'grid_fwd' => ha_pf_path( 'grid_flow_forward',    'M 787 366 L 805 375 L 633 439', $cfg ),
+        'grid_rev' => ha_pf_path( 'grid_flow_reverse',    'M 633 439 L 805 375 L 787 366', $cfg ),
+        'load_fwd' => ha_pf_path( 'load_flow_forward',    'M 590 427 L 673 396 L 612 369', $cfg ),
+        'load_rev' => ha_pf_path( 'load_flow_reverse',    'M 590 427 L 673 396 L 612 369', $cfg ),
+        'pv_fwd'   => ha_pf_path( 'pv_flow_forward',      'M 331 417 L 510 486',           $cfg ),
+        'pv_rev'   => ha_pf_path( 'pv_flow_reverse',      'M 510 486 L 331 417',           $cfg ),
+        'bat_fwd'  => ha_pf_path( 'battery_flow_forward', 'M 532 500 L 364 563',           $cfg ),
+        'bat_rev'  => ha_pf_path( 'battery_flow_reverse', 'M 364 563 L 532 500',           $cfg ),
+        'ev_fwd'   => ha_pf_path( 'ev_flow_forward',      'M 618 497 L 713 532 L 786 499', $cfg ),
+        'ev_rev'   => ha_pf_path( 'ev_flow_reverse',      'M 786 499 L 713 532 L 618 497', $cfg ),
     ];
 
     // Entity IDs passed to JS (not the token — that stays server-side)
@@ -179,7 +183,7 @@ function ha_pf_shortcode() {
     if ( $ev )      { $all_keys[] = 'ev_power';           $all_keys[] = 'ev_soc'; }
 
     foreach ( $all_keys as $key ) {
-        $entities[ $key ] = ha_pf_opt( $key );
+        $entities[ $key ] = ha_pf_opt( $key, '', $cfg );
     }
 
     // Merge custom entities (only visible ones)
@@ -232,9 +236,9 @@ function ha_pf_shortcode() {
     $positions = [];
     foreach ( $pos_defaults as $key => [ $def_rot, $def_x, $def_y ] ) {
         $positions[ $key ] = [
-            'rot' => ha_pf_int( $key . '_rot',   $def_rot ),
-            'x'   => ha_pf_pos( $key . '_x_pos', $def_x ),
-            'y'   => ha_pf_pos( $key . '_y_pos', $def_y ),
+            'rot' => ha_pf_int( $key . '_rot',   $def_rot, $cfg ),
+            'x'   => ha_pf_pos( $key . '_x_pos', $def_x,   $cfg ),
+            'y'   => ha_pf_pos( $key . '_y_pos', $def_y,   $cfg ),
         ];
     }
     // Merge custom entity positions (after built-in positions are set)
@@ -411,10 +415,12 @@ function ha_pf_shortcode() {
         const POSITIONS    = <?php echo wp_json_encode( $positions ); ?>;
         const CUSTOM_UNITS = <?php echo wp_json_encode( $custom_units ); ?>;
         const CUSTOM_SIZES       = <?php echo wp_json_encode( $custom_sizes ); ?>;
-        const REFRESH_INTERVAL   = <?php echo (int) max( 5, min( 300, (int) get_option( 'ha_powerflow_refresh_interval', 5 ) ) ); ?>; // seconds
+        const REFRESH_INTERVAL   = <?php echo (int) max( 5, min( 300, (int) ha_pf_opt( 'refresh_interval', '5', $cfg ) ) ); ?>; // seconds
         const THRESHOLDS         = <?php
-            $raw_thresh = get_option( 'ha_powerflow_thresholds', '[]' );
-            $thresh_arr = json_decode( $raw_thresh ?: '[]', true );
+            $raw_thresh = ( $cfg !== null )
+                ? ( $cfg['thresholds'] ?? '[]' )
+                : ( get_option( 'ha_powerflow_thresholds', '[]' ) ?: '[]' );
+            $thresh_arr = json_decode( $raw_thresh, true );
             echo wp_json_encode( is_array( $thresh_arr ) ? $thresh_arr : [] );
         ?>;
 
@@ -438,25 +444,43 @@ function ha_pf_shortcode() {
         if ( ! svg ) return;   // shortcode not rendered properly
 
         // -----------------------------------------------
-        // AJAX proxy fetch
-        // The browser never talks directly to Home Assistant.
+        // AJAX proxy fetch — batch edition.
+        //
+        // Sends all entity IDs in a single POST to the
+        // ha_pf_proxy_batch endpoint, which fires all
+        // Home Assistant requests in parallel server-side
+        // and returns one JSON object keyed by entity key.
         // -----------------------------------------------
-        async function fetchEntity( entityId ) {
+        async function fetchAllEntities() {
+            // Build { key: entity_id } — skip keys with no ID configured
+            const entityMap = {};
+            for ( const key of Object.keys( ENTITIES ) ) {
+                if ( ENTITIES[ key ] ) entityMap[ key ] = ENTITIES[ key ];
+            }
+
+            if ( Object.keys( entityMap ).length === 0 ) return {};
+
             try {
                 const res = await fetch( AJAX_URL, {
                     method:  'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body:    new URLSearchParams({
-                        action: 'ha_pf_proxy',
-                        nonce:  NONCE,
-                        entity: entityId,
+                        action:   'ha_pf_proxy_batch',
+                        nonce:    NONCE,
+                        entities: JSON.stringify( entityMap ),
                     }).toString(),
                 } );
-                if ( ! res.ok ) return null;
+
+                if ( ! res.ok ) return {};
+
                 const json = await res.json();
-                return json.success ? json.data : null;
+
+                // json.data is { key: { state, unit } | null }
+                return json.success ? json.data : {};
+
             } catch ( e ) {
-                return null;
+                // Transport failure — return empty so caller handles gracefully
+                return {};
             }
         }
 
@@ -831,19 +855,71 @@ function ha_pf_shortcode() {
         }
 
         // -----------------------------------------------
+        // Numeric tween engine
+        //
+        // Smoothly animates a numeric text label from its
+        // previous value to the new one over TWEEN_MS ms.
+        // Multiple overlapping tweens on the same element
+        // are cancelled — only the latest wins.
+        //
+        // Only numeric W/kW values are tweened.
+        // Non-numeric states (e.g. "unavailable") snap instantly.
+        // SOC % values are tweened too since they're numbers.
+        // -----------------------------------------------
+        const TWEEN_MS    = 600;
+        const _prevNumVal = {};   // key → last numeric value shown
+        const _tweenIds   = {};   // key → rAF handle (cancel on new tween)
+
+        function tweenLabel( key, el, fromVal, toVal, formatFn, thresholdFn ) {
+            // Cancel any in-flight tween for this element
+            if ( _tweenIds[ key ] ) {
+                cancelAnimationFrame( _tweenIds[ key ] );
+                delete _tweenIds[ key ];
+            }
+
+            const start = performance.now();
+            const delta = toVal - fromVal;
+
+            function step( now ) {
+                const t        = Math.min( 1, ( now - start ) / TWEEN_MS );
+                // Ease out cubic: fast start, slow finish
+                const eased    = 1 - Math.pow( 1 - t, 3 );
+                const current  = fromVal + delta * eased;
+                el.textContent = formatFn( current );
+                thresholdFn( toVal );   // apply final colour throughout tween
+
+                if ( t < 1 ) {
+                    _tweenIds[ key ] = requestAnimationFrame( step );
+                } else {
+                    // Ensure we land exactly on the target
+                    el.textContent = formatFn( toVal );
+                    thresholdFn( toVal );
+                    delete _tweenIds[ key ];
+                    _prevNumVal[ key ] = toVal;
+                }
+            }
+
+            _tweenIds[ key ] = requestAnimationFrame( step );
+        }
+
+        // -----------------------------------------------
         // Main update loop
         // -----------------------------------------------
         async function updateAll() {
-            let gaugeSoc    = null;
-            let gaugeWatts  = null;
-            let evGaugeSoc  = null;
+            let gaugeSoc     = null;
+            let gaugeWatts   = null;
+            let evGaugeSoc   = null;
             let evGaugeWatts = null;
 
-            for ( const key of Object.keys( ENTITIES ) ) {
-                const entityId = ENTITIES[ key ];
-                if ( ! entityId ) continue;
+            // Single round-trip: all entities fetched in parallel server-side.
+            // results is { key: { state, unit } | null }
+            const results = await fetchAllEntities();
 
-                const data = await fetchEntity( entityId );
+            // Nothing came back at all — leave labels as-is, don't mark success
+            if ( ! results || Object.keys( results ).length === 0 ) return;
+
+            for ( const key of Object.keys( ENTITIES ) ) {
+                const data = results[ key ] || null;
                 const el   = document.getElementById( 'ha-pf-txt-' + key + '-' + UID );
                 if ( ! data || ! el ) continue;
 
@@ -854,21 +930,16 @@ function ha_pf_shortcode() {
                     : ( data.unit || '' ).toLowerCase();
                 const displayUnit  = unitOverride || data.unit || '';
 
-                el.textContent = label + ': ' + (
-                    unit === 'w' ? formatPower( data.state ) : data.state + ( displayUnit ? ' ' + displayUnit : '' )
-                );
-
-                // ── Threshold colouring ──────────────────────────────────
-                // Evaluate all rules for this key. Last matching rule wins.
-                // Numeric comparison on the raw state value.
-                ( function applyThresholds() {
-                    var numVal = parseFloat( data.state );
-                    if ( isNaN( numVal ) ) { el.removeAttribute( 'fill' ); return; }
-
+                // ── Threshold colouring helper ────────────────────────
+                // Called during tween (with interpolated numVal) and on snap.
+                // Last matching rule wins.
+                function applyThresholds( numVal ) {
+                    if ( isNaN( numVal ) ) { el.style.fill = ''; return; }
                     var matched = null;
                     for ( var ti = 0; ti < THRESHOLDS.length; ti++ ) {
                         var t = THRESHOLDS[ ti ];
-                        if ( t.key !== key ) continue;
+                        var normKey = key.replace( /^custom__/, '' );
+                        if ( t.key !== key && t.key !== normKey ) continue;
                         var tval = parseFloat( t.value );
                         var hit  = false;
                         if      ( t.operator === '<'  ) hit = numVal <  tval;
@@ -878,13 +949,40 @@ function ha_pf_shortcode() {
                         else if ( t.operator === '==' ) hit = numVal === tval;
                         if ( hit ) matched = t.colour;
                     }
+                    el.style.fill = matched || '';
+                }
 
-                    if ( matched ) {
-                        el.setAttribute( 'fill', matched );
+                // ── Update label text with tween or snap ──────────────
+                const newNumVal = parseFloat( data.state );
+
+                if ( ! isNaN( newNumVal ) ) {
+                    // Numeric value — tween from previous to new
+                    const prevVal = ( _prevNumVal[ key ] !== undefined )
+                        ? _prevNumVal[ key ]
+                        : newNumVal;   // first paint: snap (no tween from 0)
+
+                    const formatFn = ( v ) => {
+                        return label + ': ' + (
+                            unit === 'w'
+                                ? formatPower( v )
+                                : v.toFixed( 1 ).replace( /\.0$/, '' ) + ( displayUnit ? ' ' + displayUnit : '' )
+                        );
+                    };
+
+                    // First paint or same value — snap, no tween
+                    if ( prevVal === newNumVal || _prevNumVal[ key ] === undefined ) {
+                        el.textContent = formatFn( newNumVal );
+                        applyThresholds( newNumVal );
+                        _prevNumVal[ key ] = newNumVal;
                     } else {
-                        el.removeAttribute( 'fill' );  // revert to CSS text_colour
+                        tweenLabel( key, el, prevVal, newNumVal, formatFn, applyThresholds );
                     }
-                }() );
+                } else {
+                    // Non-numeric (e.g. "unavailable") — snap instantly
+                    el.textContent = label + ': ' + data.state + ( displayUnit ? ' ' + displayUnit : '' );
+                    applyThresholds( NaN );
+                    delete _prevNumVal[ key ];
+                }
 
                 const watts = parseFloat( data.state );
                 if ( isNaN( watts ) ) continue;
@@ -904,7 +1002,7 @@ function ha_pf_shortcode() {
                 if ( key === 'ev_soc'        && EV      ) evGaugeSoc = data.state;
             }
 
-            // Mark the refresh cycle as successful if any entity returned data
+            // Mark the refresh cycle as successful — one batch response = success
             markSuccess();
 
             // Update battery gauge if both values were received

@@ -1371,3 +1371,258 @@
     color: #ef4444 !important;
     border-color: #ef4444 !important;
 }
+
+/* ═══════════════════════════════════════════════════════
+   NAMED CONFIGS
+   ═══════════════════════════════════════════════════════ */
+
+/* Create-new row */
+.ha-pf-nc-create-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+/* Config list items */
+.ha-pf-nc-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--pf-surface-alt);
+    border: 1px solid var(--pf-border);
+    border-radius: var(--pf-radius-sm);
+    margin-bottom: 8px;
+}
+
+.ha-pf-nc-item-label {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--pf-text-primary);
+    min-width: 120px;
+}
+
+.ha-pf-nc-item-slug {
+    font-family: var(--pf-font-mono);
+    font-size: 12px;
+    color: var(--pf-text-muted);
+    background: var(--pf-border);
+    padding: 2px 7px;
+    border-radius: 4px;
+}
+
+.ha-pf-nc-item-shortcode {
+    font-family: var(--pf-font-mono);
+    font-size: 11px;
+    color: var(--pf-green-dim);
+    margin-left: auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+}
+
+.ha-pf-nc-item-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* Editor panel */
+#ha-pf-nc-editor {
+    border: 2px solid var(--pf-green);
+    border-radius: var(--pf-radius);
+    margin-top: 16px;
+    background: var(--pf-surface);
+    box-shadow: var(--pf-shadow-md);
+}
+
+.ha-pf-nc-editor-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 18px;
+    background: var(--pf-surface-alt);
+    border-bottom: 1px solid var(--pf-border);
+    border-radius: var(--pf-radius) var(--pf-radius) 0 0;
+    gap: 4px;
+}
+
+.ha-pf-nc-editor-body {
+    padding: 20px 22px;
+}
+
+/* Section labels inside editor */
+.ha-pf-nc-section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pf-text-muted);
+    margin-bottom: 10px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--pf-border);
+}
+
+/* Feature toggle row */
+.ha-pf-nc-toggle-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+
+.ha-pf-nc-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+/* Form table inside editor */
+.ha-pf-nc-form-table {
+    margin: 0 0 6px;
+}
+
+.ha-pf-nc-form-table th {
+    width: 180px;
+    padding: 6px 0;
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--pf-text-primary);
+}
+
+.ha-pf-nc-form-table td {
+    padding: 6px 0;
+}
+
+/* Entity group blocks */
+.ha-pf-nc-entity-group {
+    margin-bottom: 16px;
+}
+
+.ha-pf-nc-entity-group-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--pf-text-muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.ha-pf-nc-entity-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.ha-pf-nc-entity-row label {
+    width: 130px;
+    font-size: 13px;
+    color: var(--pf-text-primary);
+    flex-shrink: 0;
+}
+
+.ha-pf-nc-entity-row input {
+    flex: 1;
+    max-width: 340px;
+}
+
+/* Editor actions bar */
+.ha-pf-nc-editor-actions {
+    display: flex;
+    align-items: center;
+    padding-top: 16px;
+    border-top: 1px solid var(--pf-border);
+    margin-top: 20px;
+}
+
+/* Delete button colour */
+.ha-pf-nc-delete-btn {
+    color: #ef4444 !important;
+    border-color: #ef4444 !important;
+}
+
+.ha-pf-nc-delete-btn:hover {
+    background: #fef2f2 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   LIVE PREVIEW PANEL
+   Full-width panel above the Appearance grid. Contains a scaled
+   SVG replica of the dashboard that updates without a page reload.
+   ───────────────────────────────────────────────────────────────── */
+
+.ha-pf-preview-panel {
+    background: var(--pf-dark-surface);
+    border: 1px solid var(--pf-dark-border);
+    border-radius: var(--pf-radius);
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.ha-pf-preview-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--pf-dark);
+    color: #e6edf3;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    border-bottom: 1px solid var(--pf-dark-border);
+    gap: 4px;
+}
+
+.ha-pf-preview-header .dashicons {
+    color: var(--pf-green);
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+.ha-pf-preview-hint {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 400;
+    color: #6e7681;
+    letter-spacing: 0;
+}
+
+.ha-pf-preview-body {
+    padding: 16px;
+    background: #0d1117;
+}
+
+/* The SVG itself — full width inside the panel, subtle rounded corners */
+#ha-pf-preview-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
+    /* faint inner shadow so it looks inset, not floating */
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+}
+
+/* "LIVE" badge pulse — informs the user this is reactive */
+.ha-pf-preview-header::after {
+    content: 'LIVE';
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--pf-green);
+    background: var(--pf-green-subtle);
+    border: 1px solid var(--pf-green-glow);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-left: 8px;
+    animation: ha-pf-live-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes ha-pf-live-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+}

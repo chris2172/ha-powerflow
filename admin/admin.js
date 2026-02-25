@@ -705,4 +705,462 @@
 
     }() );
 
+    // -------------------------------------------------------
+    // Named Configs manager
+    // -------------------------------------------------------
+    ( function () {
+
+        var ncNonce   = haPfAdmin.namedConfigsNonce || '';
+        var ajaxUrl   = haPfAdmin.ajaxUrl || '';
+
+        var listEl    = document.getElementById( 'ha-pf-nc-list' );
+        var editor    = document.getElementById( 'ha-pf-nc-editor' );
+        var statusEl  = document.getElementById( 'ha-pf-nc-status' );
+
+        var createBtn = document.getElementById( 'ha-pf-nc-create-btn' );
+        var newLabel  = document.getElementById( 'ha-pf-nc-new-label' );
+        var newSlug   = document.getElementById( 'ha-pf-nc-new-slug' );
+
+        var editorTitle = document.getElementById( 'ha-pf-nc-editor-title' );
+        var editorSlugDisplay = document.getElementById( 'ha-pf-nc-editor-slug-display' );
+        var closeBtn  = document.getElementById( 'ha-pf-nc-editor-close' );
+        var saveBtn   = document.getElementById( 'ha-pf-nc-save-btn' );
+        var saveStatus = document.getElementById( 'ha-pf-nc-save-status' );
+
+        var currentSlug = null;   // slug of the config currently open in the editor
+
+        if ( ! listEl || ! ncNonce ) return;
+
+        // ── Auto-generate slug from label ─────────────────────────────────
+        if ( newLabel && newSlug ) {
+            newLabel.addEventListener( 'input', function () {
+                if ( newSlug._userEdited ) return;
+                newSlug.value = ( newLabel.value || '' )
+                    .toLowerCase()
+                    .replace( /[^a-z0-9]+/g, '-' )
+                    .replace( /^-|-$/g, '' )
+                    .substring( 0, 40 );
+            } );
+            newSlug.addEventListener( 'input', function () {
+                newSlug._userEdited = !! newSlug.value;
+            } );
+        }
+
+        // ── AJAX helper ───────────────────────────────────────────────────
+        function ncAjax( action, data, cb ) {
+            var fd = new FormData();
+            fd.append( 'action', action );
+            fd.append( 'nonce',  ncNonce );
+            Object.keys( data || {} ).forEach( function ( k ) {
+                fd.append( k, data[ k ] );
+            } );
+            fetch( ajaxUrl, { method: 'POST', body: fd } )
+                .then( function ( r ) { return r.json(); } )
+                .then( function ( res ) { cb( null, res ); } )
+                .catch( function ( err ) { cb( err, null ); } );
+        }
+
+        // ── Build the configs list ────────────────────────────────────────
+        function renderList( configs ) {
+            listEl.innerHTML = '';
+
+            if ( ! configs || ! configs.length ) {
+                listEl.innerHTML = '<p class="description">No named configs yet. Create one below.</p>';
+                return;
+            }
+
+            configs.forEach( function ( item ) {
+                var div = document.createElement( 'div' );
+                div.className = 'ha-pf-nc-item';
+                div.innerHTML =
+                    '<span class="ha-pf-nc-item-label">' + esc( item.label ) + '</span>' +
+                    '<span class="ha-pf-nc-item-slug">' + esc( item.slug ) + '</span>' +
+                    '<span class="ha-pf-nc-item-shortcode">[ha_powerflow config=&quot;' + esc( item.slug ) + '&quot;]</span>' +
+                    '<span class="ha-pf-nc-item-actions">' +
+                        '<button type="button" class="button ha-pf-nc-edit-btn" data-slug="' + esc( item.slug ) + '" data-label="' + esc( item.label ) + '">' +
+                            '<span class="dashicons dashicons-edit" style="margin-top:3px;"></span> Edit' +
+                        '</button>' +
+                        '<button type="button" class="button ha-pf-nc-delete-btn" data-slug="' + esc( item.slug ) + '" data-label="' + esc( item.label ) + '">' +
+                            '<span class="dashicons dashicons-trash" style="margin-top:3px;"></span>' +
+                        '</button>' +
+                    '</span>';
+
+                div.querySelector( '.ha-pf-nc-edit-btn' ).addEventListener( 'click', openEditor );
+                div.querySelector( '.ha-pf-nc-delete-btn' ).addEventListener( 'click', deleteConfig );
+
+                listEl.appendChild( div );
+            } );
+        }
+
+        // ── Load and render the list ──────────────────────────────────────
+        function loadList() {
+            ncAjax( 'ha_pf_nc_list', {}, function ( err, res ) {
+                if ( err || ! res || ! res.success ) {
+                    setStatus( 'Could not load configs.', 'error' );
+                    return;
+                }
+                renderList( res.data.configs );
+            } );
+        }
+
+        loadList();
+
+        // ── Create config ─────────────────────────────────────────────────
+        if ( createBtn ) {
+            createBtn.addEventListener( 'click', function () {
+                var label = ( newLabel && newLabel.value.trim() ) || '';
+                var slug  = ( newSlug  && newSlug.value.trim()  ) || '';
+
+                if ( ! label ) { setStatus( 'Please enter a name for the config.', 'error' ); return; }
+                if ( ! slug  ) { setStatus( 'Please enter a slug (e.g. solar-only).', 'error' ); return; }
+                if ( ! /^[a-z0-9][a-z0-9\-]{0,38}$/.test( slug ) ) {
+                    setStatus( 'Slug must use lowercase letters, digits and hyphens only.', 'error' );
+                    return;
+                }
+
+                createBtn.disabled = true;
+                setStatus( 'Creating…', '' );
+
+                ncAjax( 'ha_pf_nc_clone_global', { slug: slug, label: label }, function ( err, res ) {
+                    createBtn.disabled = false;
+                    if ( err || ! res || ! res.success ) {
+                        var msg = res && res.data && res.data.message ? res.data.message : 'Create failed.';
+                        setStatus( msg, 'error' );
+                        return;
+                    }
+                    if ( newLabel ) { newLabel.value = ''; }
+                    if ( newSlug  ) { newSlug.value = ''; newSlug._userEdited = false; }
+                    setStatus( 'Config "' + esc( res.data.label ) + '" created.', 'ok' );
+                    loadList();
+                    // Immediately open the editor for the new config
+                    openEditorForSlug( res.data.slug, res.data.label );
+                } );
+            } );
+        }
+
+        // ── Delete config ─────────────────────────────────────────────────
+        function deleteConfig( e ) {
+            var btn   = e.currentTarget;
+            var slug  = btn.dataset.slug;
+            var label = btn.dataset.label;
+
+            if ( ! window.confirm( 'Delete config "' + label + '"? This cannot be undone.' ) ) return;
+
+            ncAjax( 'ha_pf_nc_delete', { slug: slug }, function ( err, res ) {
+                if ( err || ! res || ! res.success ) {
+                    setStatus( 'Delete failed.', 'error' );
+                    return;
+                }
+                setStatus( 'Config "' + esc( label ) + '" deleted.', 'ok' );
+                if ( currentSlug === slug ) closeEditor();
+                loadList();
+            } );
+        }
+
+        // ── Open editor ───────────────────────────────────────────────────
+        function openEditor( e ) {
+            var btn   = e.currentTarget;
+            openEditorForSlug( btn.dataset.slug, btn.dataset.label );
+        }
+
+        function openEditorForSlug( slug, label ) {
+            currentSlug = slug;
+            if ( editorTitle ) editorTitle.textContent = label;
+            if ( editorSlugDisplay ) editorSlugDisplay.textContent = '[ha_powerflow config="' + slug + '"]';
+            if ( saveStatus ) saveStatus.textContent = '';
+
+            // Fetch the config data then populate fields
+            ncAjax( 'ha_pf_nc_get', { slug: slug }, function ( err, res ) {
+                if ( err || ! res || ! res.success ) {
+                    setStatus( 'Could not load config.', 'error' );
+                    return;
+                }
+                populateEditor( res.data.config );
+
+                if ( editor ) {
+                    editor.style.display = '';
+                    editor.removeAttribute( 'aria-hidden' );
+                    editor.scrollIntoView( { behavior: 'smooth', block: 'start' } );
+                }
+            } );
+        }
+
+        // ── Populate all editor fields from a config object ───────────────
+        function populateEditor( cfg ) {
+            if ( ! editor ) return;
+            editor.querySelectorAll( '.ha-pf-nc-field' ).forEach( function ( el ) {
+                var field = el.dataset.field || '';
+                var type  = el.dataset.type  || el.type;
+                var val   = cfg[ field ];
+
+                if ( type === 'checkbox' ) {
+                    el.checked = ( val === '1' || val === true || val === 1 );
+                } else if ( val !== undefined && val !== null ) {
+                    el.value = val;
+                }
+            } );
+        }
+
+        // ── Collect editor fields into a config object ────────────────────
+        function collectEditor() {
+            var out = {};
+            if ( ! editor ) return out;
+            editor.querySelectorAll( '.ha-pf-nc-field' ).forEach( function ( el ) {
+                var field = el.dataset.field || '';
+                var type  = el.dataset.type  || el.type;
+                if ( ! field ) return;
+                out[ field ] = ( type === 'checkbox' ) ? ( el.checked ? '1' : '0' ) : el.value;
+            } );
+            return out;
+        }
+
+        // ── Save config ───────────────────────────────────────────────────
+        if ( saveBtn ) {
+            saveBtn.addEventListener( 'click', function () {
+                if ( ! currentSlug ) return;
+
+                saveBtn.disabled = true;
+                if ( saveStatus ) { saveStatus.textContent = 'Saving…'; saveStatus.style.color = ''; }
+
+                var cfg = collectEditor();
+                // Preserve the label from the editor title since we don't have a label field in the editor
+                if ( editorTitle ) cfg.label = editorTitle.textContent;
+
+                ncAjax( 'ha_pf_nc_save', { slug: currentSlug, config: JSON.stringify( cfg ) }, function ( err, res ) {
+                    saveBtn.disabled = false;
+                    if ( err || ! res || ! res.success ) {
+                        var msg = res && res.data && res.data.message ? res.data.message : 'Save failed.';
+                        if ( saveStatus ) { saveStatus.textContent = msg; saveStatus.style.color = '#ef4444'; }
+                        return;
+                    }
+                    if ( saveStatus ) {
+                        saveStatus.textContent = 'Saved ✓';
+                        saveStatus.style.color = 'var(--pf-green-dim)';
+                        setTimeout( function () {
+                            if ( saveStatus ) saveStatus.textContent = '';
+                        }, 2500 );
+                    }
+                    loadList();
+                } );
+            } );
+        }
+
+        // ── Close editor ──────────────────────────────────────────────────
+        function closeEditor() {
+            currentSlug = null;
+            if ( editor ) {
+                editor.style.display = 'none';
+                editor.setAttribute( 'aria-hidden', 'true' );
+            }
+        }
+
+        if ( closeBtn ) {
+            closeBtn.addEventListener( 'click', closeEditor );
+        }
+
+        // ── HTML escape helper ────────────────────────────────────────────
+        function esc( str ) {
+            return String( str )
+                .replace( /&/g, '&amp;' )
+                .replace( /</g, '&lt;' )
+                .replace( />/g, '&gt;' )
+                .replace( /"/g, '&quot;' );
+        }
+
+        function setStatus( msg, type ) {
+            if ( ! statusEl ) return;
+            statusEl.textContent = msg;
+            statusEl.style.color = type === 'error' ? '#ef4444' : ( type === 'ok' ? 'var(--pf-green-dim)' : '' );
+        }
+
+    }() );
+
+
+    // ══════════════════════════════════════════════════════════════════════
+    // LIVE PREVIEW  — updates the miniature SVG as settings are changed
+    // ══════════════════════════════════════════════════════════════════════
+    (function initPreview() {
+
+        const svg  = document.getElementById( 'ha-pf-preview-svg' );
+        if ( ! svg ) return;   // preview panel not rendered
+
+        const D = window.haPfPreviewData;
+        if ( ! D ) return;
+
+        // ── helpers ──────────────────────────────────────────────────────
+        function val( id ) {
+            const el = document.getElementById( id );
+            return el ? el.value : '';
+        }
+
+        function optVal( name ) {
+            const el = document.querySelector( '[name="' + name + '"]:not([type=hidden])' );
+            if ( ! el ) return '';
+            if ( el.type === 'checkbox' ) return el.checked ? '1' : '0';
+            return el.value;
+        }
+
+        function pos( key, field ) {
+            const name    = 'ha_powerflow_' + key + '_' + field;
+            const input   = document.querySelector( '[name="' + name + '"]' );
+            const raw     = input ? parseInt( input.value, 10 ) : NaN;
+            const defKey  = field === 'x_pos' ? 'x' : field === 'y_pos' ? 'y' : 'rot';
+            const defVal  = ( D.posDefaults[ key ] || {} )[ defKey ] || 0;
+            // x/y of 0 means "not set, use default"; rotation of 0 is valid
+            const isXY    = field === 'x_pos' || field === 'y_pos';
+            if ( isNaN( raw ) ) return defVal;
+            if ( isXY && raw === 0 ) return defVal;
+            return raw;
+        }
+
+        // ── image ─────────────────────────────────────────────────────────
+        function updateImage() {
+            const imgEl = document.getElementById( 'ha-pf-preview-img' );
+            if ( ! imgEl ) return;
+            const urlField = document.getElementById( 'ha_pf_image_url_field' );
+            if ( urlField && urlField.value ) {
+                imgEl.setAttribute( 'href', urlField.value );
+            }
+        }
+
+        // ── colours ───────────────────────────────────────────────────────
+        function updateColours() {
+            const textC = val( 'ha_pf_text_colour' ) || '#5EC766';
+            const lineC = val( 'ha_pf_line_colour' ) || '#5EC766';
+
+            // Labels
+            svg.querySelectorAll( '.ha-pf-preview-label' ).forEach( el => {
+                el.setAttribute( 'fill', textC );
+            } );
+            // Lines
+            svg.querySelectorAll( '.ha-pf-preview-line' ).forEach( el => {
+                el.setAttribute( 'stroke', lineC );
+            } );
+        }
+
+        // ── label positions ───────────────────────────────────────────────
+        function updatePositions() {
+            D.entities.forEach( key => {
+                const el = document.getElementById( 'ha-pf-prev-txt-' + key );
+                if ( ! el ) return;
+
+                const x   = pos( key, 'x_pos' );
+                const y   = pos( key, 'y_pos' );
+                const rot = pos( key, 'rot' );
+
+                el.setAttribute( 'x', x );
+                el.setAttribute( 'y', y );
+
+                if ( rot !== 0 ) {
+                    el.setAttribute( 'transform', 'rotate(' + rot + ' ' + x + ' ' + y + ')' );
+                } else {
+                    el.removeAttribute( 'transform' );
+                }
+            } );
+        }
+
+        // ── flow paths ───────────────────────────────────────────────────
+        function updatePaths() {
+            const flowMap = {
+                grid: 'grid', load: 'load', pv: 'pv', battery: 'bat', ev: 'ev'
+            };
+            for ( const [ flow, lineKey ] of Object.entries( flowMap ) ) {
+                const lineEl = document.getElementById( 'ha-pf-prev-line-' + lineKey );
+                if ( ! lineEl ) continue;
+
+                const fwdInput = document.querySelector( '[name="ha_powerflow_' + flow + '_flow_forward"]' );
+                const rawFwd   = fwdInput ? fwdInput.value.trim() : '';
+                const fwd      = rawFwd.match( /^[Mm]/ ) ? rawFwd : D.pathDefaults[ flow ].fwd;
+                lineEl.setAttribute( 'd', fwd );
+            }
+        }
+
+        // ── feature toggles (show/hide lines & labels) ───────────────────
+        function updateFeatures() {
+            const solar   = document.getElementById( 'ha_pf_enable_solar' );
+            const battery = document.getElementById( 'ha_pf_enable_battery' );
+            const ev      = document.getElementById( 'ha_pf_enable_ev' );
+            const hasSolar   = solar   && solar.checked;
+            const hasBattery = battery && battery.checked;
+            const hasEv      = ev      && ev.checked;
+
+            function setVisible( id, show ) {
+                const el = document.getElementById( id );
+                if ( el ) el.style.display = show ? '' : 'none';
+            }
+
+            setVisible( 'ha-pf-prev-line-pv',  hasSolar );
+            setVisible( 'ha-pf-prev-line-bat',  hasBattery );
+            setVisible( 'ha-pf-prev-line-ev',   hasEv );
+
+            const solarKeys   = ['pv_power','pv_energy'];
+            const batteryKeys = ['battery_power','battery_energy_in','battery_energy_out','battery_soc'];
+            const evKeys      = ['ev_power','ev_soc'];
+            const exportKeys  = ['grid_energy_out'];
+
+            solarKeys.forEach( k => setVisible( 'ha-pf-prev-txt-' + k, hasSolar ) );
+            batteryKeys.forEach( k => setVisible( 'ha-pf-prev-txt-' + k, hasBattery ) );
+            evKeys.forEach( k => setVisible( 'ha-pf-prev-txt-' + k, hasEv ) );
+            exportKeys.forEach( k => setVisible( 'ha-pf-prev-txt-' + k, hasSolar || hasBattery ) );
+        }
+
+        // ── full refresh ─────────────────────────────────────────────────
+        function refresh() {
+            updateImage();
+            updateColours();
+            updatePositions();
+            updatePaths();
+            updateFeatures();
+        }
+
+        // ── wire up change listeners ──────────────────────────────────────
+
+        // Colour pickers
+        ['ha_pf_text_colour','ha_pf_line_colour','ha_pf_dot_colour'].forEach( id => {
+            const el = document.getElementById( id );
+            if ( el ) el.addEventListener( 'input', refresh );
+        } );
+
+        // Image URL field
+        const imgField = document.getElementById( 'ha_pf_image_url_field' );
+        if ( imgField ) {
+            imgField.addEventListener( 'change', refresh );
+            imgField.addEventListener( 'input',  refresh );
+        }
+
+        // Feature toggles
+        ['ha_pf_enable_solar','ha_pf_enable_battery','ha_pf_enable_ev'].forEach( id => {
+            const el = document.getElementById( id );
+            if ( el ) el.addEventListener( 'change', refresh );
+        } );
+
+        // Position fields — delegate on the form so it covers dynamically added rows
+        const form = document.getElementById( 'ha-pf-form' );
+        if ( form ) {
+            form.addEventListener( 'input', function ( e ) {
+                const name = e.target.name || '';
+                if ( name.match( /_(rot|x_pos|y_pos)$/ ) ) {
+                    updatePositions();
+                }
+                if ( name.match( /_flow_(forward|reverse)$/ ) ) {
+                    updatePaths();
+                }
+            } );
+        }
+
+        // Reset buttons fire a 'change' event after resetting; listen on document
+        document.addEventListener( 'click', function ( e ) {
+            if ( e.target.closest( '.ha-pf-colour-reset-btn' ) ) {
+                setTimeout( refresh, 0 );
+            }
+        } );
+
+        // Media library image selection
+        document.addEventListener( 'ha-pf-image-selected', refresh );
+
+        // Initial render
+        refresh();
+
+    }() );
+
 } )( jQuery, haPfAdmin );

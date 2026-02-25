@@ -49,7 +49,8 @@ function ha_pf_activate() {
 // -------------------------------------------------------
 require_once HA_PF_DIR . 'includes/settings-register.php';
 require_once HA_PF_DIR . 'includes/config-crypto.php';   // AES encrypt/decrypt
-require_once HA_PF_DIR . 'includes/config-export.php';   // YAML snapshot on save
+require_once HA_PF_DIR . 'includes/config-manager.php';  // Named config slots (defines HA_PF_NAMED_CONFIGS_OPT)
+require_once HA_PF_DIR . 'includes/config-export.php';   // YAML snapshot on save (uses HA_PF_NAMED_CONFIGS_OPT)
 require_once HA_PF_DIR . 'includes/ajax-proxy.php';
 require_once HA_PF_DIR . 'includes/shortcode.php';
 
@@ -93,6 +94,7 @@ function ha_pf_admin_enqueue( $hook ) {
         'testConnectionNonce'  => wp_create_nonce( 'ha_pf_test_connection' ),
         'listSnapshotsNonce'   => wp_create_nonce( 'ha_pf_list_snapshots' ),
         'restoreSnapshotNonce' => wp_create_nonce( 'ha_pf_restore_snapshot' ),
+        'namedConfigsNonce'    => wp_create_nonce( HA_PF_NC_NONCE ),
         'entityLabels'         => [
             'grid_power'         => 'Grid Power',
             'grid_energy_in'     => 'Grid Energy In',

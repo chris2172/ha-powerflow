@@ -651,6 +651,199 @@ function ha_pf_settings_page() {
                  ══════════════════════════════════════════ -->
             <p class="ha-pf-section-label"><?php esc_html_e( 'Appearance', 'ha-powerflow' ); ?></p>
 
+
+            <!-- ══════════════════════════════════════════
+                 LIVE PREVIEW PANEL
+                 ══════════════════════════════════════════ -->
+            <div class="ha-pf-preview-panel" id="ha-pf-preview-panel">
+                <div class="ha-pf-preview-header">
+                    <span class="dashicons dashicons-visibility" style="margin-right:6px;"></span>
+                    <?php esc_html_e( 'Live Preview', 'ha-powerflow' ); ?>
+                    <span class="ha-pf-preview-hint">
+                        <?php esc_html_e( 'Updates as you change colours, positions and the background image.', 'ha-powerflow' ); ?>
+                    </span>
+                </div>
+                <div class="ha-pf-preview-body">
+                    <?php
+                    // Resolve all values with defaults for the preview SVG
+                    $prev_img         = get_option( 'ha_powerflow_image_url', $default_img ) ?: $default_img;
+                    $prev_text_colour = get_option( 'ha_powerflow_text_colour', '#5EC766' ) ?: '#5EC766';
+                    $prev_line_colour = get_option( 'ha_powerflow_line_colour', '#5EC766' ) ?: '#5EC766';
+                    $prev_dot_colour  = get_option( 'ha_powerflow_dot_colour',  '#5EC766' ) ?: '#5EC766';
+                    $prev_solar   = get_option( 'ha_powerflow_enable_solar',   '0' ) === '1';
+                    $prev_battery = get_option( 'ha_powerflow_enable_battery', '0' ) === '1';
+                    $prev_ev      = get_option( 'ha_powerflow_enable_ev',      '0' ) === '1';
+
+                    // Default positions (same as shortcode.php)
+                    $prev_pos_defaults = [
+                        'grid_power'         => [  0, 740, 210 ],
+                        'grid_energy_in'     => [  0, 740,  70 ],
+                        'load_power'         => [ -6, 360, 180 ],
+                        'load_energy'        => [  0, 360,  70 ],
+                        'pv_power'           => [ -9,  49, 312 ],
+                        'pv_energy'          => [  0,  14,  70 ],
+                        'battery_power'      => [  0, 360, 665 ],
+                        'battery_energy_in'  => [  0,  14, 685 ],
+                        'battery_energy_out' => [  0,  14, 665 ],
+                        'battery_soc'        => [  0, 360, 685 ],
+                        'ev_power'           => [ 15, 750, 460 ],
+                        'ev_soc'             => [ 15, 750, 480 ],
+                        'grid_energy_out'    => [  0, 740,  90 ],
+                    ];
+                    $prev_labels = [
+                        'grid_power'         => 'Grid',
+                        'grid_energy_in'     => 'Grid In',
+                        'grid_energy_out'    => 'Grid Out',
+                        'load_power'         => 'Load',
+                        'load_energy'        => 'Load Energy',
+                        'pv_power'           => 'PV',
+                        'pv_energy'          => 'PV Energy',
+                        'battery_power'      => 'Battery',
+                        'battery_energy_in'  => 'Battery In',
+                        'battery_energy_out' => 'Battery Out',
+                        'battery_soc'        => 'Battery SOC',
+                        'ev_power'           => 'EV',
+                        'ev_soc'             => 'SOC',
+                    ];
+                    $prev_mock_values = [
+                        'grid_power'         => '2.40 kW',
+                        'grid_energy_in'     => '5.21 kWh',
+                        'grid_energy_out'    => '0.80 kWh',
+                        'load_power'         => '1.80 kW',
+                        'load_energy'        => '8.50 kWh',
+                        'pv_power'           => '4.20 kW',
+                        'pv_energy'          => '12.3 kWh',
+                        'battery_power'      => '1.00 kW',
+                        'battery_energy_in'  => '3.10 kWh',
+                        'battery_energy_out' => '2.90 kWh',
+                        'battery_soc'        => '72%',
+                        'ev_power'           => '7.20 kW',
+                        'ev_soc'             => '54%',
+                    ];
+
+                    // Default paths (same as shortcode.php)
+                    $prev_paths = [
+                        'grid_fwd' => 'M 787 366 L 805 375 L 633 439',
+                        'grid_rev' => 'M 633 439 L 805 375 L 787 366',
+                        'load_fwd' => 'M 590 427 L 673 396 L 612 369',
+                        'load_rev' => 'M 590 427 L 673 396 L 612 369',
+                        'pv_fwd'   => 'M 331 417 L 510 486',
+                        'pv_rev'   => 'M 510 486 L 331 417',
+                        'bat_fwd'  => 'M 532 500 L 364 563',
+                        'bat_rev'  => 'M 364 563 L 532 500',
+                        'ev_fwd'   => 'M 618 497 L 713 532 L 786 499',
+                        'ev_rev'   => 'M 786 499 L 713 532 L 618 497',
+                    ];
+                    foreach ( $flow_defaults as $flow => [ $def_fwd, $def_rev ] ) {
+                        $saved_fwd = get_option( 'ha_powerflow_' . $flow . '_flow_forward' );
+                        $saved_rev = get_option( 'ha_powerflow_' . $flow . '_flow_reverse' );
+                        $flow_key_fwd = $flow === 'battery' ? 'bat_fwd' : $flow . '_fwd';
+                        $flow_key_rev = $flow === 'battery' ? 'bat_rev' : $flow . '_rev';
+                        if ( $saved_fwd ) $prev_paths[ $flow_key_fwd ] = $saved_fwd;
+                        if ( $saved_rev ) $prev_paths[ $flow_key_rev ] = $saved_rev;
+                    }
+
+                    // Build preview entity list
+                    $prev_entities = [ 'grid_power', 'grid_energy_in', 'load_power', 'load_energy' ];
+                    if ( $prev_solar || $prev_battery ) $prev_entities[] = 'grid_energy_out';
+                    if ( $prev_solar )   { $prev_entities[] = 'pv_power';      $prev_entities[] = 'pv_energy'; }
+                    if ( $prev_battery ) { $prev_entities[] = 'battery_power'; $prev_entities[] = 'battery_energy_in';
+                                           $prev_entities[] = 'battery_energy_out'; $prev_entities[] = 'battery_soc'; }
+                    if ( $prev_ev )      { $prev_entities[] = 'ev_power';      $prev_entities[] = 'ev_soc'; }
+                    ?>
+                    <svg id="ha-pf-preview-svg"
+                         viewBox="0 0 1000 750"
+                         preserveAspectRatio="xMidYMid meet"
+                         style="width:100%;height:auto;display:block;border-radius:6px;overflow:hidden;">
+
+                        <image id="ha-pf-preview-img"
+                               href="<?php echo esc_url( $prev_img ); ?>"
+                               x="0" y="0" width="1000" height="750"/>
+
+                        <!-- Flow path lines -->
+                        <path id="ha-pf-prev-line-grid" class="ha-pf-preview-line"
+                              d="<?php echo esc_attr( $prev_paths['grid_fwd'] ); ?>"
+                              stroke="<?php echo esc_attr( $prev_line_colour ); ?>" stroke-width="2" stroke-opacity="0.35" fill="none"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                        <path id="ha-pf-prev-line-load" class="ha-pf-preview-line"
+                              d="<?php echo esc_attr( $prev_paths['load_fwd'] ); ?>"
+                              stroke="<?php echo esc_attr( $prev_line_colour ); ?>" stroke-width="2" stroke-opacity="0.35" fill="none"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                        <?php if ( $prev_solar ) : ?>
+                        <path id="ha-pf-prev-line-pv" class="ha-pf-preview-line"
+                              d="<?php echo esc_attr( $prev_paths['pv_fwd'] ); ?>"
+                              stroke="<?php echo esc_attr( $prev_line_colour ); ?>" stroke-width="2" stroke-opacity="0.35" fill="none"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                        <?php endif; ?>
+                        <?php if ( $prev_battery ) : ?>
+                        <path id="ha-pf-prev-line-bat" class="ha-pf-preview-line"
+                              d="<?php echo esc_attr( $prev_paths['bat_fwd'] ); ?>"
+                              stroke="<?php echo esc_attr( $prev_line_colour ); ?>" stroke-width="2" stroke-opacity="0.35" fill="none"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                        <?php endif; ?>
+                        <?php if ( $prev_ev ) : ?>
+                        <path id="ha-pf-prev-line-ev" class="ha-pf-preview-line"
+                              d="<?php echo esc_attr( $prev_paths['ev_fwd'] ); ?>"
+                              stroke="<?php echo esc_attr( $prev_line_colour ); ?>" stroke-width="2" stroke-opacity="0.35" fill="none"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                        <?php endif; ?>
+
+                        <!-- Labels with mock values -->
+                        <?php foreach ( $prev_entities as $pkey ) :
+                            if ( ! isset( $prev_pos_defaults[ $pkey ] ) ) continue;
+                            [ $def_rot, $def_x, $def_y ] = $prev_pos_defaults[ $pkey ];
+                            $rot = (int) ( get_option( 'ha_powerflow_' . $pkey . '_rot' ) ?: $def_rot );
+                            $px  = (int) ( get_option( 'ha_powerflow_' . $pkey . '_x_pos' ) ?: $def_x );
+                            $py  = (int) ( get_option( 'ha_powerflow_' . $pkey . '_y_pos' ) ?: $def_y );
+                            $plabel = strtoupper( $prev_labels[ $pkey ] ?? $pkey );
+                            $pmock  = $prev_mock_values[ $pkey ] ?? '—';
+                        ?>
+                        <text id="ha-pf-prev-txt-<?php echo esc_attr( $pkey ); ?>"
+                              class="ha-pf-preview-label"
+                              x="<?php echo esc_attr( $px ); ?>"
+                              y="<?php echo esc_attr( $py ); ?>"
+                              font-size="18"
+                              font-family="sans-serif"
+                              fill="<?php echo esc_attr( $prev_text_colour ); ?>"
+                              <?php if ( $rot !== 0 ) : ?>
+                              transform="rotate(<?php echo esc_attr( $rot ); ?> <?php echo esc_attr( $px ); ?> <?php echo esc_attr( $py ); ?>)"
+                              <?php endif; ?>>
+                            <?php echo esc_html( $plabel . ': ' . $pmock ); ?>
+                        </text>
+                        <?php endforeach; ?>
+                    </svg>
+
+                    <?php
+                    // Pass preview config to JS
+                    $prev_pos_json = [];
+                    foreach ( $prev_pos_defaults as $pkey => [ $def_rot, $def_x, $def_y ] ) {
+                        $rot = (int) ( get_option( 'ha_powerflow_' . $pkey . '_rot' ) ?: $def_rot );
+                        $px  = (int) ( get_option( 'ha_powerflow_' . $pkey . '_x_pos' ) ?: $def_x );
+                        $py  = (int) ( get_option( 'ha_powerflow_' . $pkey . '_y_pos' ) ?: $def_y );
+                        $prev_pos_json[ $pkey ] = [ 'rot' => $rot, 'x' => $px, 'y' => $py ];
+                    }
+                    ?>
+                    <script>
+                    window.haPfPreviewData = {
+                        posDefaults: <?php echo wp_json_encode( array_map( fn($v) => ['rot'=>$v[0],'x'=>$v[1],'y'=>$v[2]], $prev_pos_defaults ) ); ?>,
+                        labels:      <?php echo wp_json_encode( $prev_labels ); ?>,
+                        mockValues:  <?php echo wp_json_encode( $prev_mock_values ); ?>,
+                        entities:    <?php echo wp_json_encode( $prev_entities ); ?>,
+                        pathDefaults: {
+                            grid: { fwd: <?php echo wp_json_encode( $flow_defaults['grid'][0] ); ?>,    rev: <?php echo wp_json_encode( $flow_defaults['grid'][1] ); ?> },
+                            load: { fwd: <?php echo wp_json_encode( $flow_defaults['load'][0] ); ?>,    rev: <?php echo wp_json_encode( $flow_defaults['load'][1] ); ?> },
+                            pv:   { fwd: <?php echo wp_json_encode( $flow_defaults['pv'][0] ); ?>,      rev: <?php echo wp_json_encode( $flow_defaults['pv'][1] ); ?> },
+                            battery: { fwd: <?php echo wp_json_encode( $flow_defaults['battery'][0] ); ?>, rev: <?php echo wp_json_encode( $flow_defaults['battery'][1] ); ?> },
+                            ev:   { fwd: <?php echo wp_json_encode( $flow_defaults['ev'][0] ); ?>,      rev: <?php echo wp_json_encode( $flow_defaults['ev'][1] ); ?> },
+                        },
+                        hasSolar:   <?php echo $prev_solar   ? 'true' : 'false'; ?>,
+                        hasBattery: <?php echo $prev_battery ? 'true' : 'false'; ?>,
+                        hasEv:      <?php echo $prev_ev      ? 'true' : 'false'; ?>,
+                    };
+                    </script>
+                </div>
+            </div>
+
             <div class="ha-pf-grid">
 
                 <!-- Colours -->
@@ -849,6 +1042,164 @@ function ha_pf_settings_page() {
                accept=".yaml,.yml"
                style="display:none;"
                aria-hidden="true">
+
+    <!-- ══════════════════════════════════════════════
+         NAMED CONFIGS  (outside options.php form — uses its own AJAX)
+         ══════════════════════════════════════════════ -->
+    <p class="ha-pf-section-label" style="margin-top:32px;">
+        <?php esc_html_e( 'Named Configs', 'ha-powerflow' ); ?>
+    </p>
+
+    <div class="ha-pf-card" id="ha-pf-named-configs-card">
+        <div class="ha-pf-card-header">
+            <span class="dashicons dashicons-screenoptions"></span>
+            <?php esc_html_e( 'Named Configs', 'ha-powerflow' ); ?>
+        </div>
+        <div class="ha-pf-card-body">
+
+            <p class="description" style="margin-bottom:16px;">
+                <?php esc_html_e(
+                    'Each named config is a self-contained set of display settings. Reference one in a shortcode to show a different dashboard on each page or post.',
+                    'ha-powerflow'
+                ); ?><br>
+                <code style="display:inline-block;margin-top:6px;">[ha_powerflow config="solar-only"]</code>
+            </p>
+
+            <!-- Existing configs rendered here by JS -->
+            <div id="ha-pf-nc-list" style="margin-bottom:20px;"></div>
+
+            <!-- Create new config -->
+            <div class="ha-pf-nc-create-row">
+                <input type="text"
+                       id="ha-pf-nc-new-label"
+                       class="regular-text"
+                       placeholder="<?php esc_attr_e( 'Name, e.g. Solar Only', 'ha-powerflow' ); ?>"
+                       maxlength="60">
+                <input type="text"
+                       id="ha-pf-nc-new-slug"
+                       style="width:160px;"
+                       placeholder="<?php esc_attr_e( 'slug e.g. solar-only', 'ha-powerflow' ); ?>"
+                       maxlength="40"
+                       pattern="[a-z0-9][a-z0-9\-]*">
+                <button type="button" id="ha-pf-nc-create-btn" class="button button-primary">
+                    <span class="dashicons dashicons-plus-alt2" style="margin-top:3px;margin-right:3px;"></span>
+                    <?php esc_html_e( 'Create from current settings', 'ha-powerflow' ); ?>
+                </button>
+            </div>
+            <p class="description" style="margin-top:6px;">
+                <?php esc_html_e( 'The new config starts as a snapshot of your current global settings. Connection credentials are always shared.', 'ha-powerflow' ); ?>
+            </p>
+
+            <p id="ha-pf-nc-status" style="margin-top:10px;" class="description"></p>
+
+        </div>
+    </div>
+
+    <!-- Named Config editor (shown inline below the card when a config is opened) -->
+    <div id="ha-pf-nc-editor" style="display:none;" aria-hidden="true">
+        <div class="ha-pf-nc-editor-header">
+            <span class="dashicons dashicons-edit" style="margin-right:6px;"></span>
+            <strong>Editing: </strong>
+            <strong id="ha-pf-nc-editor-title" style="margin-left:4px;"></strong>
+            <code id="ha-pf-nc-editor-slug-display"
+                  style="margin-left:10px;font-size:12px;color:var(--pf-text-muted);background:var(--pf-surface-alt);padding:2px 6px;border-radius:4px;"></code>
+            <button type="button" id="ha-pf-nc-editor-close" class="button" style="margin-left:auto;" aria-label="Close editor">
+                <span class="dashicons dashicons-no-alt" style="margin-top:3px;"></span>
+            </button>
+        </div>
+        <div class="ha-pf-nc-editor-body">
+
+            <?php
+            // Entity groups used in the editor
+            $nc_entity_groups = [
+                'Grid & Load' => [
+                    'grid_power'      => 'Grid Power',
+                    'grid_energy_in'  => 'Grid Energy In',
+                    'grid_energy_out' => 'Grid Energy Out',
+                    'load_power'      => 'Load Power',
+                    'load_energy'     => 'Load Energy',
+                ],
+                'Solar' => [
+                    'pv_power'  => 'PV Power',
+                    'pv_energy' => 'PV Energy',
+                ],
+                'Battery' => [
+                    'battery_power'      => 'Battery Power',
+                    'battery_energy_in'  => 'Battery In',
+                    'battery_energy_out' => 'Battery Out',
+                    'battery_soc'        => 'Battery SOC',
+                ],
+                'EV' => [
+                    'ev_power' => 'EV Power',
+                    'ev_soc'   => 'EV SOC',
+                ],
+            ];
+            ?>
+
+            <!-- Features -->
+            <div class="ha-pf-nc-section-label"><?php esc_html_e( 'Features', 'ha-powerflow' ); ?></div>
+            <div class="ha-pf-nc-toggle-row">
+                <?php foreach ( [ 'enable_solar' => 'Solar', 'enable_battery' => 'Battery', 'enable_ev' => 'EV' ] as $fk => $fl ) : ?>
+                <label class="ha-pf-nc-toggle-label">
+                    <input type="checkbox" class="ha-pf-nc-field" data-field="<?php echo esc_attr( $fk ); ?>" data-type="checkbox">
+                    <?php echo esc_html( $fl ); ?>
+                </label>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- Appearance -->
+            <div class="ha-pf-nc-section-label"><?php esc_html_e( 'Appearance', 'ha-powerflow' ); ?></div>
+            <table class="form-table ha-pf-nc-form-table" role="presentation">
+                <tr>
+                    <th><?php esc_html_e( 'Background Image URL', 'ha-powerflow' ); ?></th>
+                    <td><input type="url" class="ha-pf-nc-field regular-text" data-field="image_url" placeholder="https://…"></td>
+                </tr>
+                <tr>
+                    <th><?php esc_html_e( 'Refresh Interval (s)', 'ha-powerflow' ); ?></th>
+                    <td><input type="number" class="ha-pf-nc-field" data-field="refresh_interval" min="5" max="300" style="width:80px;"></td>
+                </tr>
+                <tr>
+                    <th><?php esc_html_e( 'Text Colour', 'ha-powerflow' ); ?></th>
+                    <td><input type="color" class="ha-pf-nc-field" data-field="text_colour"></td>
+                </tr>
+                <tr>
+                    <th><?php esc_html_e( 'Line Colour', 'ha-powerflow' ); ?></th>
+                    <td><input type="color" class="ha-pf-nc-field" data-field="line_colour"></td>
+                </tr>
+                <tr>
+                    <th><?php esc_html_e( 'Dot Colour', 'ha-powerflow' ); ?></th>
+                    <td><input type="color" class="ha-pf-nc-field" data-field="dot_colour"></td>
+                </tr>
+            </table>
+
+            <!-- Entity IDs -->
+            <div class="ha-pf-nc-section-label"><?php esc_html_e( 'Entity IDs', 'ha-powerflow' ); ?></div>
+            <?php foreach ( $nc_entity_groups as $group_label => $group_entities ) : ?>
+            <div class="ha-pf-nc-entity-group">
+                <div class="ha-pf-nc-entity-group-label"><?php echo esc_html( $group_label ); ?></div>
+                <?php foreach ( $group_entities as $ek => $el ) : ?>
+                <div class="ha-pf-nc-entity-row">
+                    <label><?php echo esc_html( $el ); ?></label>
+                    <input type="text"
+                           class="ha-pf-nc-field"
+                           data-field="<?php echo esc_attr( $ek ); ?>"
+                           placeholder="sensor.<?php echo esc_attr( $ek ); ?>">
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endforeach; ?>
+
+            <!-- Save bar -->
+            <div class="ha-pf-nc-editor-actions">
+                <button type="button" id="ha-pf-nc-save-btn" class="button button-primary">
+                    <span class="dashicons dashicons-saved" style="margin-top:3px;margin-right:3px;"></span>
+                    <?php esc_html_e( 'Save Config', 'ha-powerflow' ); ?>
+                </button>
+                <span id="ha-pf-nc-save-status" style="margin-left:12px;font-size:13px;"></span>
+            </div>
+
+        </div><!-- /editor body -->
+    </div><!-- /nc editor -->
 
     <!-- ══════════════════════════════════════════════
          CONFIG RESTORE MODAL

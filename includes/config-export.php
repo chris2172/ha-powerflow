@@ -269,6 +269,19 @@ function ha_pf_build_yaml() {
         }
     }
 
+    // ---- named_configs --------------------------------
+    // Stored as a single JSON scalar so the minimal YAML parser does not
+    // need to handle arbitrary nesting depth. The value is a JSON-encoded
+    // object keyed by slug, identical to the ha_powerflow_named_configs
+    // WP option. The HA token lives only in connection: above.
+    $named_raw = get_option( HA_PF_NAMED_CONFIGS_OPT, '{}' );
+    $named_arr = json_decode( $named_raw ?: '{}', true );
+    if ( ! is_array( $named_arr ) ) $named_arr = [];
+
+    $lines[] = '';
+    $lines[] = '# named_configs is a single JSON scalar — do not hand-edit this line.';
+    $lines[] = 'named_configs: ' . ha_pf_yaml_scalar( wp_json_encode( $named_arr ) );
+
     return implode( "\n", $lines ) . "\n";
 }
 
@@ -489,6 +502,23 @@ function ha_pf_import_config( $yaml_string ) {
             $thresh[] = [ 'key' => $key, 'operator' => $op, 'value' => $val, 'colour' => $colour ];
         }
         update_option( 'ha_powerflow_thresholds', wp_json_encode( $thresh ) );
+    }
+
+    // Named configs
+    // The value is a JSON string stored as a YAML scalar. Decode it, run
+    // every config through ha_pf_nc_sanitise() for safety, then persist.
+    if ( isset( $data['named_configs'] ) && is_string( $data['named_configs'] ) && $data['named_configs'] !== '' ) {
+        $decoded = json_decode( $data['named_configs'], true );
+        if ( is_array( $decoded ) ) {
+            $clean = [];
+            foreach ( $decoded as $slug => $cfg ) {
+                $slug = sanitize_key( $slug );
+                if ( ! ha_pf_valid_slug( $slug ) ) continue;
+                if ( ! is_array( $cfg ) ) continue;
+                $clean[ $slug ] = ha_pf_nc_sanitise( $cfg );
+            }
+            update_option( HA_PF_NAMED_CONFIGS_OPT, wp_json_encode( $clean ), false );
+        }
     }
 
     return true;

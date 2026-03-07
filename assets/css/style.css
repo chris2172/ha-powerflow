@@ -1,0 +1,100 @@
+/* ── HA Powerflow Widget ─────────────────────────────────────────────────── */
+
+.ha-powerflow-widget {
+    position: relative;
+    width: 1000px;
+    height: 700px;
+    max-width: 100%;
+    aspect-ratio: 1000 / 700;
+    background-color: #0d1117; /* Darker Lumina-style base */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border-radius: 20px;
+    margin: 0 auto;
+    font-family: 'Exo 2', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    box-shadow: 0 0 50px rgba(0,0,0,0.8), inset 0 0 100px rgba(0,0,0,0.5); /* Deeper shadow */
+    overflow: hidden;
+    color: #fff;
+}
+
+.ha-powerflow-widget::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(13, 17, 23, 0.2) 0%, rgba(13, 17, 23, 0.6) 100%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+#ha-pf-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    overflow: visible;
+}
+
+.ha-pf-status {
+    position: absolute;
+    bottom: 12px;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 11px;
+    font-family: 'Exo 2', sans-serif;
+    color: rgba(255,255,255,0.35);
+    z-index: 2;
+    pointer-events: none;
+    padding: 0 12px;
+    transition: color 0.3s;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.ha-pf-status.ha-pf-error {
+    color: #ff5e5e;
+    font-weight: 700;
+}
+
+/* ── Debug bar ──────────────────────────────────────────────────────────── */
+.ha-pf-debug-bar {
+    display: none;
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    background: rgba(255, 180, 0, 0.92);
+    color: #1a1000;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    padding: 7px 12px;
+    z-index: 10;
+    pointer-events: none;
+    letter-spacing: 0.5px;
+}
+
+/* ── Coordinate pin ─────────────────────────────────────────────────────── */
+.ha-pf-coord-pin {
+    display: none;
+    position: absolute;
+    background: rgba(0,0,0,0.82);
+    color: #f0c040;
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid #f0c040;
+    pointer-events: none;
+    z-index: 20;
+    white-space: nowrap;
+    transform: translate(12px, -50%);
+}
+
+.ha-powerflow-widget[data-debug="true"] { cursor: crosshair; }
+.ha-powerflow-widget[data-debug="true"] #ha-pf-svg { pointer-events: all; }
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 1040px) {
+    .ha-powerflow-widget { width: 100%; height: auto; }
+}

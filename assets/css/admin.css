@@ -1,0 +1,415 @@
+/* ── HA Powerflow Admin Styles - Premium Redesign ─────────────────────── */
+
+/* ── Typography & Variables ────────────────────────────────────────────── */
+:root {
+    --hapf-bg: #f3f6f9;
+    --hapf-surface: #ffffff;
+    --hapf-text-main: #2c3e50;
+    --hapf-text-muted: #7f8c8d;
+    --hapf-primary: #3498db;
+    --hapf-primary-hover: #2980b9;
+    --hapf-border: #e2e8f0;
+    --hapf-shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    --hapf-shadow-md: 0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+    --hapf-shadow-hover: 0 20px 35px -5px rgba(0, 0, 0, 0.1), 0 10px 15px -5px rgba(0, 0, 0, 0.06);
+    --hapf-radius: 16px;
+    --hapf-transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.ha-pf-wrap {
+    max-width: 1400px;
+    margin: 20px 20px 20px 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--hapf-text-main);
+    padding-bottom: 80px; /* Space for more compact sticky save bar */
+}
+
+.ha-pf-wrap h1 {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: #1a202c;
+    margin-bottom: 30px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.ha-pf-version {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--hapf-primary);
+    background: rgba(52, 152, 219, 0.1);
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0;
+}
+
+/* ── Toggle bar (Glassmorphism inspired) ────────────────────────────────── */
+.ha-pf-toggles-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 24px;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: var(--hapf-radius);
+    padding: 20px 24px;
+    margin: 0 0 32px;
+    box-shadow: var(--hapf-shadow-md);
+    position: sticky;
+    top: 32px;
+    z-index: 10;
+}
+
+.ha-pf-toggles-title {
+    font-weight: 800;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #cbd5e1;
+    color: var(--hapf-text-muted);
+    margin-right: 12px;
+}
+
+/* Slider toggle (Bouncy modern pill) */
+.ha-pf-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    user-select: none;
+    padding: 8px 12px;
+    border-radius: 12px;
+    transition: var(--hapf-transition);
+}
+
+.ha-pf-toggle-label:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.ha-pf-toggle-label input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.ha-pf-slider {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 28px;
+    background: #e2e8f0;
+    border-radius: 30px;
+    transition: var(--hapf-transition);
+    flex-shrink: 0;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);
+}
+
+.ha-pf-slider::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 20px;
+    height: 20px;
+    background: #ffffff;
+    border-radius: 50%;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.ha-pf-toggle-label input:checked + .ha-pf-slider {
+    background: var(--hapf-primary);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1), 0 0 12px rgba(52, 152, 219, 0.3);
+}
+
+.ha-pf-toggle-label input:checked + .ha-pf-slider::after {
+    transform: translateX(22px);
+}
+
+.ha-pf-toggle-text {
+    font-size: 15px;
+    font-weight: 600;
+    color: #475569;
+    transition: color 0.3s;
+}
+.ha-pf-toggle-label input:checked ~ .ha-pf-toggle-text {
+    color: #0f172a;
+}
+
+/* ── Two-column layout ──────────────────────────────────────────────────── */
+.ha-pf-columns {
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+}
+
+.ha-pf-col {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    min-width: 0;
+}
+
+.ha-pf-col-left  { flex: 1 1 600px; }
+.ha-pf-col-right { flex: 1 1 450px; }
+
+/* ── Cards (Soft & Elevated) ────────────────────────────────────────────── */
+.ha-pf-card {
+    background: var(--hapf-surface);
+    border: 1px solid rgba(226, 232, 240, 0.6);
+    border-radius: var(--hapf-radius);
+    padding: 32px;
+    box-shadow: var(--hapf-shadow-sm);
+    transition: var(--hapf-transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.ha-pf-card:hover {
+    box-shadow: var(--hapf-shadow-hover);
+    transform: translateY(-2px);
+    border-color: rgba(226, 232, 240, 1);
+}
+
+.ha-pf-card h2 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 24px;
+    padding: 0 0 16px;
+    border-bottom: 2px solid #f1f5f9;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+/* Form inputs & Tables inside cards */
+.form-table-sm th {
+    padding: 16px 12px 16px 0 !important;
+    font-weight: 600;
+    color: #475569;
+    width: 180px;
+}
+.form-table-sm td {
+    padding: 12px 0 !important;
+}
+
+/* Styled Inputs */
+.ha-pf-card input[type="text"],
+.ha-pf-card input[type="password"],
+.ha-pf-card input[type="url"],
+.ha-pf-card input[type="number"],
+.ha-pf-card select {
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 14px;
+    color: #334155;
+    background: #f8fafc;
+    transition: var(--hapf-transition);
+    box-shadow: none;
+}
+
+.ha-pf-card input:focus,
+.ha-pf-card select:focus {
+    background: #ffffff;
+    border-color: var(--hapf-primary);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+    outline: none;
+}
+
+.form-table-sm .widefat { width: 100%; }
+
+/* Custom Range Slider */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 5px;
+    outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--hapf-primary);
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: transform 0.1s;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+
+/* Buttons */
+.ha-pf-card .button {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    border-radius: 8px;
+    padding: 6px 16px;
+    font-weight: 600;
+    transition: var(--hapf-transition);
+    height: auto;
+    line-height: normal;
+}
+.ha-pf-card .button:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+    border-color: #94a3b8;
+}
+#ha-pf-test-btn {
+    background: #10b981;
+    color: white;
+    border: none;
+}
+#ha-pf-test-btn:hover {
+    background: #059669;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+/* Hint box */
+.ha-pf-hint {
+    margin-top: 16px;
+    padding: 16px 20px;
+    background: #f8fafc;
+    border-left: 4px solid var(--hapf-primary);
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #475569;
+}
+.ha-pf-hint code {
+    background: #e2e8f0;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #0f172a;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+/* ── Module cards ───────────────────────────────────────────────────────── */
+/* Colour-coded left border per module */
+.ha-pf-module-card[data-module="solar"]    { border-top: 5px solid #f59e0b; }
+.ha-pf-module-card[data-module="battery"]  { border-top: 5px solid #10b981; }
+.ha-pf-module-card[data-module="ev"]       { border-top: 5px solid #3b82f6; }
+.ha-pf-module-card[data-module="heatpump"] { border-top: 5px solid #ef4444; }
+
+/* Remove old left border logic */
+.ha-pf-module-card { border-left-width: 1px; }
+
+/* Badge pill in the h2 */
+.ha-pf-module-badge {
+    font-size: 13px;
+    font-weight: 800;
+    padding: 4px 12px;
+    border-radius: 8px;
+    color: #fff;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+.ha-pf-badge-solar    { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.ha-pf-badge-battery  { background: linear-gradient(135deg, #10b981, #059669); }
+.ha-pf-badge-ev       { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.ha-pf-badge-heatpump { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+/* "Enabled" pill */
+.ha-pf-module-status {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #fff;
+    background: #10b981;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-left: auto;
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+}
+td > .ha-pf-module-status { margin-left:0; display:inline-block !important; margin-top:8px; }
+
+/* No-modules placeholder */
+.ha-pf-placeholder {
+    border: 2px dashed #cbd5e1;
+    background: transparent;
+    text-align: center;
+    color: #64748b;
+    font-size: 15px;
+    padding: 60px 40px;
+    box-shadow: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+}
+.ha-pf-placeholder:hover {
+    border-color: #94a3b8;
+    transform: none;
+    box-shadow: none;
+}
+.ha-pf-placeholder strong { color: #334155; }
+
+/* Save Settings Submits */
+.ha-pf-wrap .button-primary {
+    background: var(--hapf-primary);
+    border: none;
+    border-radius: 8px;
+    padding: 0 24px;
+    height: 40px;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: 0 4px 14px rgba(52, 152, 219, 0.3);
+    transition: var(--hapf-transition);
+    margin: 0 !important; /* Ensure no margin in sticky bar */
+}
+.ha-pf-wrap .button-primary:hover {
+    background: var(--hapf-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+}
+
+/* ── Sticky Save Bar ─────────────────────────────────────────────────────── */
+.ha-pf-sticky-save-bar {
+    position: fixed;
+    bottom: 10px;
+    left: 180px; /* Adjust for WP admin menu */
+    right: 40px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 10px;
+    padding: 6px 20px;
+    box-shadow: 0 -8px 20px -5px rgba(0, 0, 0, 0.1);
+    z-index: 99;
+    display: flex;
+    justify-content: center;
+    transition: var(--hapf-transition);
+}
+
+.ha-pf-sticky-save-bar:hover {
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 -15px 35px -5px rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 960px) {
+    .ha-pf-sticky-save-bar {
+        left: 20px;
+        right: 20px;
+    }
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+    .ha-pf-columns { flex-direction: column; }
+    .ha-pf-col-left, .ha-pf-col-right { flex: 1 1 auto; width: 100%; }
+}

@@ -28,7 +28,8 @@ class HA_Powerflow_Shortcode {
         $any_module = ( ! empty( $o['enable_solar'] )    ||
                         ! empty( $o['enable_battery'] )  ||
                         ! empty( $o['enable_ev'] )       ||
-                        ! empty( $o['enable_heatpump'] ) );
+                        ! empty( $o['enable_heatpump'] ) ||
+                        ! empty( $o['enable_weather'] ) );
 
         $grid_line = ( isset( $o['grid_line'] ) && $o['grid_line'] !== '' )
                      ? $o['grid_line'] : 'M 120,350 L 880,350';
@@ -80,6 +81,10 @@ class HA_Powerflow_Shortcode {
         $sx = (int) ( $o['status_x'] ?? 500 );
         $sy = (int) ( $o['status_y'] ?? 320 );
 
+        // Weather position
+        $wx = (int) ( $o['weather_x'] ?? 500 );
+        $wy = (int) ( $o['weather_y'] ?? 80 );
+
         wp_localize_script( 'ha-powerflow-script', 'haPowerflow', [
             'ajaxUrl'         => admin_url( 'admin-ajax.php' ),
             'nonce'           => wp_create_nonce( 'ha_powerflow_nonce' ),
@@ -104,6 +109,9 @@ class HA_Powerflow_Shortcode {
             'gridPower'       => $o['grid_power']  ?? '',
             'loadPower'       => $o['load_power']  ?? '',
             'gridEnergy'      => $o['grid_energy'] ?? '',
+            'gridEnergyOut'   => $o['grid_energy_out'] ?? '',
+            'gridPriceIn'     => $o['grid_price_in'] ?? '',
+            'gridPriceOut'    => $o['grid_price_out'] ?? '',
             'loadEnergy'      => $o['load_energy'] ?? '',
             'pvPower'         => $o['pv_power']          ?? '',
             'pvEnergy'        => $o['pv_energy']         ?? '',
@@ -120,6 +128,9 @@ class HA_Powerflow_Shortcode {
             'heatpumpEnergy'   => $o['heatpump_energy']     ?? '',
             'heatpumpEfficiency'=> $o['heatpump_efficiency'] ?? '',
             'enableHeatpump'   => ! empty( $o['enable_heatpump'] ) ? 'true' : 'false',
+            'enableWeather'    => ! empty( $o['enable_weather'] )  ? 'true' : 'false',
+            'weatherFontSize'  => (int) ( $o['weather_font_size'] ?? 13 ),
+            'customEntities'   => ! empty( $o['custom_entities'] ) ? $o['custom_entities'] : [],
         ] );
 
         ob_start(); ?>
@@ -151,6 +162,11 @@ class HA_Powerflow_Shortcode {
                     <filter id="hapf-shadow">
                         <feDropShadow dx="0" dy="1.5" stdDeviation="4" flood-color="#000" flood-opacity="0.9"/>
                     </filter>
+                    <filter id="hapf-glass">
+                        <feFlood flood-color="white" flood-opacity="0.05" result="bg"/>
+                        <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur"/>
+                        <feComposite in="bg" in2="blur" operator="over"/>
+                    </filter>
                 </defs>
 
                 <!-- ── Grid Line (Grid→Home or Grid→Inverter) ───────────────── -->
@@ -158,12 +174,12 @@ class HA_Powerflow_Shortcode {
                       d="<?php echo esc_attr( $grid_line ); ?>"
                       fill="none"
                       stroke="<?php echo esc_attr( $grid_color ); ?>"
-                      stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"
+                      stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"
                       opacity="<?php echo esc_attr( $line_opacity ); ?>"/>
                 <path id="ha-pf-path" class="ha-pf-laser"
                       d="<?php echo esc_attr( $grid_line ); ?>"
                       fill="none" stroke="<?php echo esc_attr( $grid_color ); ?>"
-                      stroke-width="1" stroke-linecap="round"
+                      stroke-width="2.0" stroke-linecap="round"
                       filter="url(#hapf-glow)" opacity="0"/>
 
                 <?php if ( $any_module ) : ?>
@@ -172,12 +188,12 @@ class HA_Powerflow_Shortcode {
                       d="<?php echo esc_attr( $load_line ); ?>"
                       fill="none"
                       stroke="<?php echo esc_attr( $load_color ); ?>"
-                      stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"
+                      stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"
                       opacity="<?php echo esc_attr( $line_opacity ); ?>"/>
                 <path id="ha-pf-load-path" class="ha-pf-laser"
                       d="<?php echo esc_attr( $load_line ); ?>"
                       fill="none" stroke="<?php echo esc_attr( $load_color ); ?>"
-                      stroke-width="1" stroke-linecap="round"
+                      stroke-width="2.0" stroke-linecap="round"
                       filter="url(#hapf-glow)" opacity="0"/>
                 <?php endif; ?>
 
@@ -187,12 +203,12 @@ class HA_Powerflow_Shortcode {
                       d="<?php echo esc_attr( $pv_line ); ?>"
                       fill="none"
                       stroke="<?php echo esc_attr( $pv_color ); ?>"
-                      stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"
+                      stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"
                       opacity="<?php echo esc_attr( $line_opacity ); ?>"/>
                 <path id="ha-pf-pv-path" class="ha-pf-laser"
                       d="<?php echo esc_attr( $pv_line ); ?>"
                       fill="none" stroke="<?php echo esc_attr( $pv_color ); ?>"
-                      stroke-width="1" stroke-linecap="round"
+                      stroke-width="2.0" stroke-linecap="round"
                       filter="url(#hapf-glow)" opacity="0"/>
                 <?php endif; ?>
 
@@ -202,12 +218,12 @@ class HA_Powerflow_Shortcode {
                       d="<?php echo esc_attr( $battery_line ); ?>"
                       fill="none"
                       stroke="<?php echo esc_attr( $battery_color ); ?>"
-                      stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"
+                      stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"
                       opacity="<?php echo esc_attr( $line_opacity ); ?>"/>
                 <path id="ha-pf-battery-path" class="ha-pf-laser"
                       d="<?php echo esc_attr( $battery_line ); ?>"
                       fill="none" stroke="<?php echo esc_attr( $battery_color ); ?>"
-                      stroke-width="1" stroke-linecap="round"
+                      stroke-width="2.0" stroke-linecap="round"
                       filter="url(#hapf-glow)" opacity="0"/>
                 <?php endif; ?>
 
@@ -217,12 +233,12 @@ class HA_Powerflow_Shortcode {
                       d="<?php echo esc_attr( $ev_line ); ?>"
                       fill="none"
                       stroke="<?php echo esc_attr( $ev_color ); ?>"
-                      stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"
+                      stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"
                       opacity="<?php echo esc_attr( $line_opacity ); ?>"/>
                 <path id="ha-pf-ev-path" class="ha-pf-laser"
                       d="<?php echo esc_attr( $ev_line ); ?>"
                       fill="none" stroke="<?php echo esc_attr( $ev_color ); ?>"
-                      stroke-width="1" stroke-linecap="round"
+                      stroke-width="2.0" stroke-linecap="round"
                       filter="url(#hapf-glow)" opacity="0"/>
                 <?php endif; ?>
 
@@ -232,7 +248,7 @@ class HA_Powerflow_Shortcode {
                       d="<?php echo esc_attr( $heatpump_line ); ?>"
                       fill="none"
                       stroke="<?php echo esc_attr( $heatpump_color ); ?>"
-                      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+                      stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"
                       opacity="<?php echo esc_attr( $line_opacity ); ?>"/>
                 <path id="ha-pf-heatpump-path" class="ha-pf-laser"
                       d="<?php echo esc_attr( $heatpump_line ); ?>"
@@ -269,6 +285,21 @@ class HA_Powerflow_Shortcode {
                       text-anchor="middle" fill="<?php echo esc_attr( $energy_color ); ?>"
                       font-family="'Exo 2', sans-serif" font-size="12"
                       filter="url(#hapf-shadow)">—</text>
+                <text id="ha-pf-grid-energy-out"
+                      x="<?php echo $gx; ?>" y="<?php echo $gy + 58; ?>"
+                      text-anchor="middle" fill="<?php echo esc_attr( $energy_color ); ?>"
+                      font-family="'Exo 2', sans-serif" font-size="12"
+                      filter="url(#hapf-shadow)" style="display:none;">—</text>
+                <text id="ha-pf-grid-price-in"
+                      x="<?php echo $gx; ?>" y="<?php echo $gy + 72; ?>"
+                      text-anchor="middle" fill="<?php echo esc_attr( $energy_color ); ?>"
+                      font-family="'Exo 2', sans-serif" font-size="12"
+                      filter="url(#hapf-shadow)">—</text>
+                <text id="ha-pf-grid-price-out"
+                      x="<?php echo $gx; ?>" y="<?php echo $gy + 86; ?>"
+                      text-anchor="middle" fill="<?php echo esc_attr( $energy_color ); ?>"
+                      font-family="'Exo 2', sans-serif" font-size="12"
+                      filter="url(#hapf-shadow)" style="display:none;">—</text>
 
                 <!-- ── Load label block ──────────────────────────────────────── -->
                 <text id="ha-pf-home-label" x="<?php echo $hx; ?>" y="<?php echo $hy; ?>"
@@ -363,12 +394,57 @@ class HA_Powerflow_Shortcode {
                       filter="url(#hapf-shadow)">—</text>
                 <?php endif; ?>
 
+                <?php if ( ! empty( $o['enable_weather'] ) ) : ?>
+                <!-- ── Weather label & Icon ─────────────────────────────────── -->
+                <g id="ha-pf-weather-icon-group" transform="translate(<?php echo $wx; ?>, <?php echo $wy - 30; ?>)">
+                     <g id="ha-pf-weather-icon" 
+                        fill="none" 
+                        stroke="<?php echo esc_attr( $title_color ); ?>" 
+                        stroke-width="2.0" 
+                        filter="url(#hapf-glow)"></g>
+                </g>
+                <text id="ha-pf-weather"
+                      x="<?php echo $wx; ?>" y="<?php echo $wy + 5; ?>"
+                      text-anchor="middle"
+                      fill="<?php echo esc_attr( $title_color ); ?>"
+                      font-family="'Exo 2', sans-serif"
+                      font-size="<?php echo (int) ( $o['weather_font_size'] ?? 13 ); ?>" font-weight="700" letter-spacing="1.5"
+                      filter="url(#hapf-shadow)"></text>
+                <?php endif; ?>
+
+                <!-- ── Custom Entities ────────────────────────────────────────── -->
+                <?php
+                if ( ! empty( $o['custom_entities'] ) && is_array( $o['custom_entities'] ) ) {
+                    foreach ( $o['custom_entities'] as $index => $item ) {
+                        if ( empty( $item['visible'] ) ) continue;
+                        $cx = (int) $item['x'];
+                        $cy = (int) $item['y'];
+                        $label = esc_html( $item['label'] );
+                        ?>
+                        <g class="ha-pf-custom-entity" id="ha-pf-custom-<?php echo $index; ?>" transform="translate(<?php echo $cx; ?>, <?php echo $cy; ?>)">
+                            <text text-anchor="middle" fill="<?php echo esc_attr( $title_color ); ?>"
+                                  font-family="'Exo 2', sans-serif" font-size="11" font-weight="700" letter-spacing="2"
+                                  filter="url(#hapf-shadow)"><?php echo strtoupper($label); ?></text>
+                            <text class="ha-pf-custom-value" dy="24" text-anchor="middle" fill="<?php echo esc_attr( $power_color ); ?>"
+                                  font-family="Orbitron, sans-serif" font-size="19" font-weight="700"
+                                  filter="url(#hapf-shadow)">—</text>
+                        </g>
+                        <?php
+                    }
+                }
+                ?>
+
             </svg>
 
             <div class="ha-pf-status" id="ha-pf-status">
                 <!-- Added a spinner animation inline here to notify user while connecting -->
                 <div class="ha-pf-spinner" style="display:inline-block; margin-right:6px; vertical-align:middle; width:12px; height:12px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:ha-pf-spin 1s linear infinite;"></div>
-                <style>@keyframes ha-pf-spin { to { transform: rotate(360deg); } }</style>
+                <style>
+                    @keyframes ha-pf-spin { to { transform: rotate(360deg); } }
+                    .ha-pf-rotate { animation: ha-pf-spin 10s linear infinite; transform-origin: center; }
+                    @keyframes ha-pf-rain-fall { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 20; } }
+                    .ha-pf-rain { stroke-dasharray: 4 4; animation: ha-pf-rain-fall 1s linear infinite; }
+                </style>
                 Connecting…
             </div>
         </div>

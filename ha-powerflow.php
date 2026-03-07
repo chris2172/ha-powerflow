@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name: HA Powerflow
- * Plugin URI:  https://github.com/
+ * Plugin URI:  https://github.com/chris2172/ha-powerflow
  * Description: Display live Home Assistant power flow on your WordPress site using [ha_powerflow]
- * Version:     1.18.7
+ * Version:     1.23.1
  * Author:      HA Powerflow
  * License:     GPL2
  */
@@ -22,9 +22,17 @@ function ha_powerflow_activate() {
         // Drop an index.php to prevent directory listing
         @file_put_contents( $pf_dir . '/index.php', "<?php // Silence is golden.\n" );
     }
+    $cfg_dir = $pf_dir . '/config';
+    if ( ! file_exists( $cfg_dir ) ) {
+        wp_mkdir_p( $cfg_dir );
+        @file_put_contents( $cfg_dir . '/index.php', "<?php // Silence is golden.\n" );
+    }
 }
 define( 'HA_POWERFLOW_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'HA_POWERFLOW_URL',     plugin_dir_url( __FILE__ ) );
+
+$upload_dir = wp_upload_dir();
+define( 'HA_POWERFLOW_CONFIG_DIR', $upload_dir['basedir'] . '/ha-powerflow/config/' );
 
 require_once HA_POWERFLOW_DIR . 'admin/settings.php';
 

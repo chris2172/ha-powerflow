@@ -7,6 +7,12 @@ class HA_Powerflow_Ajax {
         add_action( 'wp_ajax_ha_pf_test_connection', [ __CLASS__, 'test_connection' ] );
         add_action( 'wp_ajax_ha_powerflow_get_data', [ __CLASS__, 'get_data' ] );
         add_action( 'wp_ajax_nopriv_ha_powerflow_get_data', [ __CLASS__, 'get_data' ] );
+        
+        add_action( 'wp_ajax_ha_powerflow_restore_snapshot',  [ __CLASS__, 'restore_snapshot' ] );
+        add_action( 'wp_ajax_ha_powerflow_create_snapshot',   [ __CLASS__, 'manual_snapshot' ] );
+        add_action( 'wp_ajax_ha_powerflow_download_snapshot', [ __CLASS__, 'download_snapshot' ] );
+        add_action( 'wp_ajax_ha_powerflow_upload_snapshot',   [ __CLASS__, 'upload_snapshot' ] );
+        add_action( 'wp_ajax_ha_powerflow_discover_entities', [ __CLASS__, 'discover_entities' ] );
     }
 
     public static function test_connection() {
@@ -67,6 +73,9 @@ class HA_Powerflow_Ajax {
             'grid_power'         => $o['grid_power']         ?? '',
             'load_power'         => $o['load_power']         ?? '',
             'grid_energy'        => $o['grid_energy']        ?? '',
+            'grid_energy_out'    => $o['grid_energy_out']    ?? '',
+            'grid_price_in'      => $o['grid_price_in']      ?? '',
+            'grid_price_out'     => $o['grid_price_out']     ?? '',
             'load_energy'        => $o['load_energy']        ?? '',
             'pv_power'           => $o['pv_power']           ?? '',
             'pv_energy'          => $o['pv_energy']          ?? '',
@@ -79,6 +88,7 @@ class HA_Powerflow_Ajax {
             'heatpump_power'     => $o['heatpump_power']     ?? '',
             'heatpump_energy'    => $o['heatpump_energy']    ?? '',
             'heatpump_efficiency'=> $o['heatpump_efficiency']?? '',
+            'weather'            => $o['weather_entity']     ?? '',
         ];
 
         $template_keys = [];
@@ -95,6 +105,20 @@ class HA_Powerflow_Ajax {
                     $entity_id
                 );
             }
+        }
+
+        // Add custom entities
+        $custom = ! empty( $o['custom_entities'] ) && is_array( $o['custom_entities'] ) ? $o['custom_entities'] : [];
+        foreach ( $custom as $index => $item ) {
+            $entity_id = $item['entity'] ?? '';
+            if ( ! $entity_id ) continue;
+
+            $template_keys[] = sprintf(
+                '"custom_%d": {"state": states("%s"), "unit": state_attr("%s", "unit_of_measurement")}',
+                $index,
+                $entity_id,
+                $entity_id
+            );
         }
 
         if ( ! empty( $template_keys ) ) {
@@ -130,5 +154,155 @@ class HA_Powerflow_Ajax {
         }
 
         wp_send_json_success( $data );
+    }
+
+    public static function discover_entities() {
+        check_ajax_referer( 'ha_pf_test_connection', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorised.' );
+
+        $o = get_option( 'ha_powerflow_options', [] );
+        $ha_url   = isset( $o['ha_url'] )   ? rtrim( $o['ha_url'], '/' ) : '';
+        $ha_token = isset( $o['ha_token'] ) ? $o['ha_token']             : '';
+
+        if ( ! $ha_url || ! $ha_token ) wp_send_json_error( 'Not configured.' );
+
+        $response = wp_remote_get( $ha_url . '/api/states', [
+            'headers' => [ 'Authorization' => 'Bearer ' . $ha_token ],
+            'timeout' => 15
+        ] );
+
+        if ( is_wp_error( $response ) ) wp_send_json_error( $response->get_error_message() );
+
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        if ( ! is_array( $body ) ) wp_send_json_error( 'Invalid HA response.' );
+
+        $findings = [];
+        $keywords = [ 'power', 'energy', 'soc', 'battery', 'solar', 'grid' ];
+
+        foreach ( $body as $state ) {
+            $eid = $state['entity_id'] ?? '';
+            $domain = explode( '.', $eid )[0];
+            if ( $domain !== 'sensor' ) continue;
+
+            $found = false;
+            foreach ( $keywords as $kw ) {
+                if ( stripos( $eid, $kw ) !== false ) {
+                    $found = true;
+                    break;
+                }
+            }
+
+            if ( $found ) {
+                $findings[] = [
+                    'entity_id'  => $eid,
+                    'attributes' => $state['attributes'] ?? []
+                ];
+            }
+            if ( count( $findings ) > 50 ) break; // Limit results
+        }
+
+        wp_send_json_success( $findings );
+    }
+
+    public static function restore_snapshot() {
+        check_ajax_referer( 'ha_pf_test_connection', 'nonce' ); // Reusing nonce for admin
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorised.' );
+
+        $filename = sanitize_file_name( $_POST['filename'] ?? '' );
+        $path = HA_POWERFLOW_CONFIG_DIR . $filename;
+
+        if ( ! $filename || ! file_exists( $path ) ) {
+            wp_send_json_error( 'Snapshot file not found.' );
+        }
+
+        $content = file_get_contents( $path );
+        $data = self::parse_yaml( $content );
+
+        if ( empty( $data ) ) {
+            wp_send_json_error( 'Invalid or empty snapshot file.' );
+        }
+
+        update_option( 'ha_powerflow_options', $data );
+        wp_send_json_success( 'Settings restored successfully from ' . $filename );
+    }
+
+    public static function manual_snapshot() {
+        check_ajax_referer( 'ha_pf_test_connection', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorised.' );
+
+        $o = get_option( 'ha_powerflow_options', [] );
+        ha_pf_create_snapshot( $o );
+
+        wp_send_json_success( 'Manual snapshot created successfully.' );
+    }
+
+    public static function download_snapshot() {
+        check_ajax_referer( 'ha_pf_test_connection', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Unauthorised.' );
+
+        $filename = sanitize_file_name( $_GET['filename'] ?? '' );
+        $path = HA_POWERFLOW_CONFIG_DIR . $filename;
+
+        if ( ! $filename || ! file_exists( $path ) ) {
+            wp_die( 'File not found.' );
+        }
+
+        while ( ob_get_level() ) {
+            ob_end_clean();
+        }
+
+        header( 'Content-Type: application/octet-stream' );
+        header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+        header( 'Expires: 0' );
+        header( 'Cache-Control: must-revalidate' );
+        header( 'Pragma: public' );
+        header( 'Content-Length: ' . filesize( $path ) );
+        readfile( $path );
+        exit;
+    }
+
+    public static function upload_snapshot() {
+        check_ajax_referer( 'ha_pf_test_connection', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorised.' );
+
+        if ( ! isset( $_FILES['snapshot'] ) ) {
+            wp_send_json_error( 'No file uploaded.' );
+        }
+
+        $content = file_get_contents( $_FILES['snapshot']['tmp_name'] );
+        $data = self::parse_yaml( $content );
+
+        if ( empty( $data ) ) {
+            wp_send_json_error( 'Invalid or empty backup file.' );
+        }
+
+        update_option( 'ha_powerflow_options', $data );
+        wp_send_json_success( 'Backup uploaded and applied successfully.' );
+    }
+
+    private static function parse_yaml( $content ) {
+        $lines = explode( "\n", $content );
+        $data = [];
+        foreach ( $lines as $line ) {
+            $line = trim( $line );
+            if ( ! $line || $line[0] === '#' ) continue;
+            
+            $pos = strpos( $line, ':' );
+            if ( $pos === false ) continue;
+            
+            $key = trim( substr( $line, 0, $pos ) );
+            $val = trim( substr( $line, $pos + 1 ) );
+            
+            // Remove surrounding quotes if present
+            if ( ( $val[0] === '"' && substr( $val, -1 ) === '"' ) || 
+                 ( $val[0] === "'" && substr( $val, -1 ) === "'" ) ) {
+                $val = substr( $val, 1, -1 );
+            }
+            // Unescape quotes
+            $val = str_replace( '\"', '"', $val );
+            
+            $data[ $key ] = $val;
+        }
+        return $data;
     }
 }

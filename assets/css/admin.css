@@ -42,10 +42,14 @@
     background: rgba(52, 152, 219, 0.1);
     padding: 4px 10px;
     border-radius: 20px;
-    letter-spacing: 0;
 }
 
-/* ── Toggle bar (Glassmorphism inspired) ────────────────────────────────── */
+/* ── Redesigned Section Spacing ────────────────────────────────────────── */
+.ha-pf-columns {
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+}
 .ha-pf-toggles-bar {
     display: flex;
     flex-wrap: wrap;
@@ -62,6 +66,145 @@
     position: sticky;
     top: 32px;
     z-index: 10;
+}
+
+.ha-pf-col-full { flex: 1 1 100%; }
+
+/* ── Custom Entities Table ──────────────────────────────────────────────── */
+#ha-pf-custom-entities-table th {
+    text-align: left;
+    padding: 12px;
+    background: #f8fafc;
+    border-bottom: 2px solid #e2e8f0;
+    font-weight: 700;
+    color: #64748b;
+}
+
+#ha-pf-custom-entities-table td {
+    padding: 10px 12px;
+    vertical-align: middle;
+}
+
+.ha-pf-toggle-sm .ha-pf-slider {
+    width: 40px;
+    height: 22px;
+}
+
+.ha-pf-toggle-sm .ha-pf-slider::after {
+    width: 16px;
+    height: 16px;
+    top: 3px;
+    left: 3px;
+}
+
+.ha-pf-toggle-sm input:checked + .ha-pf-slider::after {
+    transform: translateX(18px);
+}
+
+.ha-pf-remove-entity {
+    color: #ef4444 !important;
+    font-weight: 800 !important;
+    border-color: #fee2e2 !important;
+}
+
+.ha-pf-remove-entity:hover {
+    background: #fef2f2 !important;
+    border-color: #f87171 !important;
+}
+
+/* ── Visual Coordinate Selector ─────────────────────────────────────────── */
+.ha-pf-xy-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.ha-pf-coord-picker-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--hapf-transition);
+}
+
+.ha-pf-coord-picker-btn:hover {
+    background: var(--hapf-primary);
+    color: white;
+    border-color: var(--hapf-primary);
+}
+
+.ha-pf-picker-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(5px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.ha-pf-picker-overlay.active {
+    visibility: visible;
+    opacity: 1;
+}
+
+.ha-pf-picker-container {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+}
+
+.ha-pf-picker-img {
+    display: block;
+    max-width: 1000px;
+    width: 100%;
+    height: auto;
+    border: 2px solid #fff;
+    cursor: crosshair;
+}
+
+.ha-pf-picker-crosshair {
+    position: absolute;
+    pointer-events: none;
+    width: 40px;
+    height: 40px;
+    border: 2px solid var(--hapf-primary);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    display: none;
+}
+
+.ha-pf-picker-crosshair::before,
+.ha-pf-picker-crosshair::after {
+    content: '';
+    position: absolute;
+    background: var(--hapf-primary);
+}
+
+.ha-pf-picker-crosshair::before { top: 50%; left: 0; width: 100%; height: 2px; transform: translateY(-50%); }
+.ha-pf-picker-crosshair::after  { left: 50%; top: 0; height: 100%; width: 2px; transform: translateX(-50%); }
+
+.ha-pf-picker-hint {
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    background: rgba(0,0,0,0.6);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
 }
 
 .ha-pf-toggles-title {
@@ -303,6 +446,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .ha-pf-module-card[data-module="battery"]  { border-top: 5px solid #10b981; }
 .ha-pf-module-card[data-module="ev"]       { border-top: 5px solid #3b82f6; }
 .ha-pf-module-card[data-module="heatpump"] { border-top: 5px solid #ef4444; }
+.ha-pf-module-card[data-module="weather"]  { border-top: 5px solid #94a3b8; }
 
 /* Remove old left border logic */
 .ha-pf-module-card { border-left-width: 1px; }

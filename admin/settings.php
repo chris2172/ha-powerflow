@@ -18,6 +18,48 @@ function ha_powerflow_register_settings() {
     register_setting( 'ha_powerflow_group', 'ha_powerflow_options', 'ha_powerflow_sanitize' );
 }
 
+/**
+ * Handle automatic snapshot on save
+ */
+add_action( 'update_option_ha_powerflow_options', 'ha_pf_create_snapshot', 10, 3 );
+add_action( 'add_option_ha_powerflow_options',    'ha_pf_create_snapshot', 10, 2 );
+
+function ha_pf_create_snapshot( $old_val, $new_val = null ) {
+    // If called via add_option, $old_val is actually the $new_val
+    if ( $new_val === null ) {
+        $new_val = $old_val;
+    }
+
+    if ( ! is_array( $new_val ) ) return;
+    
+    $timestamp = date( 'Y-m-d_H-i-s' );
+    $filename  = HA_POWERFLOW_CONFIG_DIR . 'snapshot_' . $timestamp . '.yaml';
+    
+    // Simple YAML-like encoding for the options array
+    $content = "# HA Powerflow Configuration Snapshot\n";
+    $content .= "# Saved: " . date( 'Y-m-d H:i:s' ) . "\n\n";
+    foreach ( $new_val as $k => $v ) {
+        if ( is_array( $v ) ) {
+            $v = json_encode( $v );
+        }
+        // Basic escaping/quoting for YAML compatibility
+        $clean_v = str_replace( '"', '\"', (string) $v );
+        $content .= "$k: \"$clean_v\"\n";
+    }
+    
+    @file_put_contents( $filename, $content );
+    
+    // Prune settings to stay at 50
+    $files = glob( HA_POWERFLOW_CONFIG_DIR . 'snapshot_*.yaml' );
+    if ( count( $files ) > 50 ) {
+        sort( $files );
+        $to_delete = count( $files ) - 50;
+        for ( $i = 0; $i < $to_delete; $i++ ) {
+            @unlink( $files[$i] );
+        }
+    }
+}
+
 add_action( 'admin_enqueue_scripts', 'ha_powerflow_admin_assets' );
 function ha_powerflow_admin_assets( $hook ) {
     if ( $hook !== 'toplevel_page_ha-powerflow' ) return;
@@ -33,6 +75,7 @@ function ha_powerflow_admin_assets( $hook ) {
         'uploadDirUrl'  => $upload_dir['baseurl'] . '/ha-powerflow/',
         'selectImage'   => __( 'Select Image', 'ha-powerflow' ),
         'useImage'      => __( 'Use this image', 'ha-powerflow' ),
+        'defaultBg'     => HA_POWERFLOW_URL . 'assets/images/default_bg.png',
     ] );
 }
 
@@ -56,10 +99,13 @@ function ha_powerflow_sanitize( $input ) {
         'ha_url'          => esc_url_raw(        $input['ha_url']          ?? '' ),
         'ha_token'        => sanitize_text_field( $input['ha_token']        ?? '' ),
         'refresh_rate'    => (int) ( $input['refresh_rate'] ?? 5000 ),
-        'grid_power'      => sanitize_text_field( $input['grid_power']      ?? '' ),
-        'load_power'      => sanitize_text_field( $input['load_power']      ?? '' ),
-        'grid_energy'     => sanitize_text_field( $input['grid_energy']     ?? '' ),
-        'load_energy'     => sanitize_text_field( $input['load_energy']     ?? '' ),
+        'grid_power'          => sanitize_text_field( $input['grid_power']          ?? '' ),
+        'load_power'          => sanitize_text_field( $input['load_power']          ?? '' ),
+        'grid_energy'         => sanitize_text_field( $input['grid_energy']         ?? '' ),
+        'grid_energy_out'     => sanitize_text_field( $input['grid_energy_out']     ?? '' ),
+        'grid_price_in'       => sanitize_text_field( $input['grid_price_in']       ?? '' ),
+        'grid_price_out'      => sanitize_text_field( $input['grid_price_out']      ?? '' ),
+        'load_energy'         => sanitize_text_field( $input['load_energy']         ?? '' ),
         'pv_power'            => sanitize_text_field( $input['pv_power']            ?? '' ),
         'pv_energy'           => sanitize_text_field( $input['pv_energy']           ?? '' ),
         'battery_power'       => sanitize_text_field( $input['battery_power']       ?? '' ),
@@ -107,21 +153,36 @@ function ha_powerflow_sanitize( $input ) {
         'enable_battery'  => ! empty( $input['enable_battery'] )  ? '1' : '',
         'enable_ev'       => ! empty( $input['enable_ev'] )       ? '1' : '',
         'enable_heatpump' => ! empty( $input['enable_heatpump'] ) ? '1' : '',
+        'enable_weather'  => ! empty( $input['enable_weather'] )  ? '1' : '',
+        'weather_entity'  => sanitize_text_field( $input['weather_entity']  ?? '' ),
+        'weather_x'       => (int) ( $input['weather_x']       ?? 500 ),
+        'weather_y'       => (int) ( $input['weather_y']       ?? 80 ),
+        'weather_font_size' => (int) ( $input['weather_font_size'] ?? 13 ),
         'debug'           => ! empty( $input['debug'] ) ? '1' : '',
+        'custom_entities' => ! empty( $input['custom_entities'] ) && is_array( $input['custom_entities'] ) ? array_map( function( $item ) {
+            return [
+                'label'   => sanitize_text_field( $item['label']  ?? '' ),
+                'entity'  => sanitize_text_field( $item['entity'] ?? '' ),
+                'x'       => (int) ( $item['x'] ?? 0 ),
+                'y'       => (int) ( $item['y'] ?? 0 ),
+                'visible' => ! empty( $item['visible'] ) ? '1' : '',
+            ];
+        }, array_values( $input['custom_entities'] ) ) : [],
     ];
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function ha_pf_xy( $o, $kx, $ky, $dx, $dy, $desc = '' ) { ?>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <div class="ha-pf-xy-group" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <label style="font-weight:600;min-width:18px;">X</label>
         <input type="number" name="ha_powerflow_options[<?php echo $kx; ?>]"
                value="<?php echo esc_attr( $o[$kx] ?? $dx ); ?>"
-               min="0" max="1000" step="1" style="width:90px;"/>
+               min="0" max="1000" step="1" style="width:70px;"/>
         <label style="font-weight:600;min-width:18px;">Y</label>
         <input type="number" name="ha_powerflow_options[<?php echo $ky; ?>]"
                value="<?php echo esc_attr( $o[$ky] ?? $dy ); ?>"
-               min="0" max="700" step="1" style="width:90px;"/>
+               min="0" max="700" step="1" style="width:70px;"/>
+        <button type="button" class="ha-pf-coord-picker-btn" title="Pick position from image">🎯</button>
     </div>
     <?php if ( $desc ) echo '<p class="description">' . $desc . '</p>';
 }
@@ -143,7 +204,8 @@ function ha_pf_any_module( $o ) {
     return ! empty( $o['enable_solar'] )    ||
            ! empty( $o['enable_battery'] )  ||
            ! empty( $o['enable_ev'] )       ||
-           ! empty( $o['enable_heatpump'] );
+           ! empty( $o['enable_heatpump'] ) ||
+           ! empty( $o['enable_weather'] );
 }
 
 function ha_powerflow_settings_page() {
@@ -156,40 +218,28 @@ function ha_powerflow_settings_page() {
     <div class="wrap ha-pf-wrap">
         <h1>⚡ HA Powerflow <span class="ha-pf-version">v<?php echo HA_POWERFLOW_VERSION; ?></span></h1>
 
-        <form method="post" action="options.php">
+        <form method="post" action="options.php" id="ha-pf-settings-form">
             <?php settings_fields( 'ha_powerflow_group' ); ?>
 
-            <!-- ═══ MODULE TOGGLES ════════════════════════════════════════ -->
             <div class="ha-pf-toggles-bar">
-                <span class="ha-pf-toggles-title">Optional Modules</span>
+                <span class="ha-pf-toggles-title">Quick Modules:</span>
                 <?php
-                $modules = [
-                    'solar'    => 'Solar',
-                    'battery'  => 'Battery',
-                    'ev'       => 'EV',
-                    'heatpump' => 'Heat Pump',
-                ];
+                $modules = [ 'solar' => 'Solar', 'battery' => 'Battery', 'ev' => 'EV', 'heatpump' => 'Heat Pump', 'weather' => 'Weather' ];
                 foreach ( $modules as $key => $label ) :
                     $checked = ! empty( $o[ 'enable_' . $key ] ); ?>
                 <label class="ha-pf-toggle-label">
-                    <input type="checkbox"
-                           id="ha-pf-toggle-<?php echo $key; ?>"
-                           name="ha_powerflow_options[enable_<?php echo $key; ?>]"
-                           value="1" <?php checked( $checked ); ?>/>
+                    <input type="checkbox" id="ha-pf-toggle-<?php echo $key; ?>" name="ha_powerflow_options[enable_<?php echo $key; ?>]" value="1" <?php checked( $checked ); ?>/>
                     <span class="ha-pf-slider"></span>
-                    <span class="ha-pf-toggle-text"><?php echo $label; ?></span>
+                    <span class="ha-pf-toggle-text"><?php echo esc_html( $label ); ?></span>
                 </label>
                 <?php endforeach; ?>
             </div>
 
-            <!-- ═══ TWO-COLUMN LAYOUT ═════════════════════════════════════ -->
+            <!-- ── Section 1: Connection & Sensors ────────────────────────── -->
             <div class="ha-pf-columns">
-
-                <!-- ── LEFT: mandatory settings ─────────────────────────── -->
                 <div class="ha-pf-col ha-pf-col-left">
-
                     <div class="ha-pf-card">
-                        <h2>🔌 Connection</h2>
+                        <h2>🔌 Connection & Refresh</h2>
                         <table class="form-table form-table-sm" role="presentation">
                             <tr>
                                 <th><label for="ha_url">HA URL</label></th>
@@ -233,373 +283,250 @@ function ha_powerflow_settings_page() {
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <p class="description">
-                                        How often the widget polls Home Assistant for new data.<br>
-                                        <strong>10 seconds</strong> is a good balance — frequent enough to feel live without hammering your HA instance.
-                                        Use 5 s only if you need near-real-time monitoring; use 30 s or more if your HA is on a slow connection or remote server.
-                                    </p>
+                                    <p class="description">How often the widget polls Home Assistant for new data.</p>
                                 </td>
                             </tr>
                         </table>
                     </div>
-
+                </div>
+                <div class="ha-pf-col ha-pf-col-right">
                     <div class="ha-pf-card">
-                        <h2>📡 Sensors</h2>
+                        <h2>🔍 Smart Discovery</h2>
+                        <p class="description">Scan your Home Assistant for relevant sensors.</p>
+                        <button type="button" id="ha-pf-discover-btn" class="button">Scan for Entities</button>
+                        <div id="ha-pf-discover-results" style="margin-top:10px; display:none; max-height:200px; overflow-y:auto; font-size:12px; border:1px solid #e2e8f0; border-radius:8px; padding:10px; background:#f8fafc;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ha-pf-columns" style="margin-top:32px;">
+                <div class="ha-pf-col ha-pf-col-left">
+                    <div class="ha-pf-card">
+                        <h2>📡 Core Sensors</h2>
                         <table class="form-table form-table-sm" role="presentation">
                             <?php ha_pf_entity( $o, 'grid_power',  'Grid Power Entity',  'sensor.grid_power',  'Positive = import, negative = export.' ); ?>
                             <?php ha_pf_entity( $o, 'load_power',  'House Power Entity',  'sensor.load_power'  ); ?>
-                            <?php ha_pf_entity( $o, 'grid_energy', 'Grid Energy Entity', 'sensor.grid_energy' ); ?>
+                            <?php ha_pf_entity( $o, 'grid_energy', 'Grid Energy Import', 'sensor.grid_energy_import' ); ?>
+                            <?php ha_pf_entity( $o, 'grid_energy_out', 'Grid Energy Export', 'sensor.grid_energy_export' ); ?>
+                            <?php ha_pf_entity( $o, 'grid_price_in', 'Grid Price Import (£)', 'sensor.grid_price_import' ); ?>
+                            <?php ha_pf_entity( $o, 'grid_price_out', 'Grid Price Export (£)', 'sensor.grid_price_export' ); ?>
                             <?php ha_pf_entity( $o, 'load_energy', 'House Energy Entity', 'sensor.load_energy' ); ?>
                         </table>
                     </div>
+                </div>
+            </div>
 
+            <!-- ── Section 2: Layout & Appearance ────────────────────────── -->
+            <div class="ha-pf-columns" style="margin-top:32px;">
+                <div class="ha-pf-col ha-pf-col-left">
                     <div class="ha-pf-card">
-                        <h2>🎨 Appearance</h2>
+                        <h2>🎨 Global Appearance</h2>
                         <table class="form-table form-table-sm" role="presentation">
                             <tr>
-                                <th><label for="bg_image">Background Image URL</label></th>
+                                <th><label for="bg_image">Background Image</label></th>
                                 <td>
                                     <div style="display:flex;gap:8px;align-items:center;">
                                         <input type="url" id="bg_image" name="ha_powerflow_options[bg_image]"
                                                value="<?php echo esc_attr( $o['bg_image'] ?? '' ); ?>"
-                                               class="widefat" placeholder="https://yoursite.com/wp-content/uploads/ha-powerflow/bg.jpg"
-                                               style="flex:1;"/>
-                                        <button type="button" id="ha-pf-media-btn" class="button">
-                                            📁 Select Image
-                                        </button>
-                                    </div>
-                                    <p class="description">
-                                        Canvas is <strong>1000 × 700 px</strong>. Leave blank to use the default background.<br>
-                                        Images uploaded via <em>Select Image</em> are saved to <code>/wp-content/uploads/ha-powerflow/</code>.
-                                    </p>
-                                    <div id="ha-pf-img-preview" style="margin-top:10px;<?php echo empty( $o['bg_image'] ) ? 'display:none;' : ''; ?>">
-                                        <img src="<?php echo esc_url( $o['bg_image'] ?? '' ); ?>"
-                                             style="max-width:260px;max-height:150px;border:1px solid #ddd;border-radius:4px;display:block;"/>
+                                               class="widefat" placeholder="URL..."/>
+                                        <button type="button" id="ha-pf-media-btn" class="button">Select</button>
                                     </div>
                                 </td>
                             </tr>
                             <tr>
-                                <th><label for="line_color">Global Line &amp; Dot Colour</label></th>
-                                <td>
-                                    <input type="text" id="line_color" name="ha_powerflow_options[line_color]"
-                                           value="<?php echo esc_attr( $color ); ?>"
-                                           class="ha-pf-color-picker" data-default-color="#4a90d9" />
-                                </td>
+                                <th><label for="line_color">Base Line Color</label></th>
+                                <td><input type="text" name="ha_powerflow_options[line_color]" value="<?php echo esc_attr( $o['line_color'] ?? '#4a90d9' ); ?>" class="ha-pf-color-picker" /></td>
                             </tr>
                             <tr>
-                                <th><label for="grid_color">↳ Grid Line</label></th>
+                                <th><label for="line_opacity">Line Opacity</label></th>
                                 <td>
-                                    <input type="text" id="grid_color" name="ha_powerflow_options[grid_color]"
-                                        value="<?php echo esc_attr( $o['grid_color'] ?? '' ); ?>"
-                                        class="ha-pf-color-picker" data-default-color="<?php echo esc_attr( $o['line_color'] ?? '#4a90d9' ); ?>" />
-                                    <span class="description" style="margin-left: 10px;">Unique color (leave blank for default)</span>
-                                </td>
-                            </tr>
-                            <tr id="ha-pf-load-color-row" <?php if ( ! $load_visible ) echo 'style="display:none;"'; ?>>
-                                <th><label for="load_color">↳ House Line</label></th>
-                                <td>
-                                    <input type="text" id="load_color" name="ha_powerflow_options[load_color]"
-                                        value="<?php echo esc_attr( $o['load_color'] ?? '' ); ?>"
-                                        class="ha-pf-color-picker" data-default-color="<?php echo esc_attr( $o['line_color'] ?? '#4a90d9' ); ?>" />
-                                    <span class="description" style="margin-left: 10px;">Unique color (leave blank for default)</span>
-                                </td>
-                            </tr>
-                            <tr id="ha-pf-pv-color-row" <?php if ( empty( $o['enable_solar'] ) ) echo 'style="display:none;"'; ?>>
-                                <th><label for="pv_color">↳ PV Line</label></th>
-                                <td>
-                                    <input type="text" id="pv_color" name="ha_powerflow_options[pv_color]"
-                                        value="<?php echo esc_attr( $o['pv_color'] ?? '' ); ?>"
-                                        class="ha-pf-color-picker" data-default-color="<?php echo esc_attr( $o['line_color'] ?? '#4a90d9' ); ?>" />
-                                    <span class="description" style="margin-left: 10px;">Unique color (leave blank for default)</span>
-                                </td>
-                            </tr>
-                            <tr id="ha-pf-battery-color-row" <?php if ( empty( $o['enable_battery'] ) ) echo 'style="display:none;"'; ?>>
-                                <th><label for="battery_color">↳ Battery Line</label></th>
-                                <td>
-                                    <input type="text" id="battery_color" name="ha_powerflow_options[battery_color]"
-                                        value="<?php echo esc_attr( $o['battery_color'] ?? '' ); ?>"
-                                        class="ha-pf-color-picker" data-default-color="<?php echo esc_attr( $o['line_color'] ?? '#4a90d9' ); ?>" />
-                                    <span class="description" style="margin-left: 10px;">Unique color (leave blank for default)</span>
-                                </td>
-                            </tr>
-                            <tr id="ha-pf-ev-color-row" <?php if ( empty( $o['enable_ev'] ) ) echo 'style="display:none;"'; ?>>
-                                <th><label for="ev_color">↳ EV Line</label></th>
-                                <td>
-                                    <input type="text" id="ev_color" name="ha_powerflow_options[ev_color]"
-                                        value="<?php echo esc_attr( $o['ev_color'] ?? '' ); ?>"
-                                        class="ha-pf-color-picker" data-default-color="<?php echo esc_attr( $o['line_color'] ?? '#4a90d9' ); ?>" />
-                                    <span class="description" style="margin-left: 10px;">Unique color (leave blank for default)</span>
-                                </td>
-                            </tr>
-                            <tr id="ha-pf-heatpump-color-row" <?php if ( empty( $o['enable_heatpump'] ) ) echo 'style="display:none;"'; ?>>
-                                <th><label for="heatpump_color">↳ Heat Pump Line</label></th>
-                                <td>
-                                    <input type="text" id="heatpump_color" name="ha_powerflow_options[heatpump_color]"
-                                        value="<?php echo esc_attr( $o['heatpump_color'] ?? '' ); ?>"
-                                        class="ha-pf-color-picker" data-default-color="<?php echo esc_attr( $o['line_color'] ?? '#4a90d9' ); ?>" />
-                                    <span class="description" style="margin-left: 10px;">Unique color (leave blank for default)</span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th><label for="line_opacity">Opacity</label></th>
-                                <td>
-                                    <div style="display:flex;align-items:center;gap:12px;">
-                                        <input type="range" id="line_opacity" name="ha_powerflow_options[line_opacity]"
-                                               min="0" max="1" step="0.05"
-                                               value="<?php echo esc_attr( $opacity ); ?>"
-                                               style="width:160px;"
-                                               oninput="document.getElementById('ha-pf-opval').textContent=parseFloat(this.value).toFixed(2)"/>
-                                        <span id="ha-pf-opval" style="font-weight:600;"><?php echo number_format( $opacity, 2 ); ?></span>
-                                    </div>
-                                    <p class="description">0 = transparent &nbsp;|&nbsp; 1 = opaque</p>
+                                    <input type="range" name="ha_powerflow_options[line_opacity]" min="0" max="1" step="0.05" value="<?php echo esc_attr( $o['line_opacity'] ?? 1.0 ); ?>" oninput="this.nextElementSibling.textContent=this.value"/>
+                                    <span class="ha-pf-range-val"><?php echo $o['line_opacity'] ?? 1.0; ?></span>
                                 </td>
                             </tr>
                         </table>
                     </div>
 
-                    <!-- Line Paths ──────────────────────────────────────── -->
                     <div class="ha-pf-card">
-                        <h2>📐 Line Paths</h2>
+                        <h2>📐 Common Paths</h2>
                         <table class="form-table form-table-sm" role="presentation">
-
-                            <tr>
-                                <th><label for="grid_line">Grid Line</label></th>
-                                <td>
-                                    <input type="text" id="grid_line" name="ha_powerflow_options[grid_line]"
-                                           value="<?php echo esc_attr( $o['grid_line'] ?? '' ); ?>"
-                                           class="widefat" placeholder="M 120,350 L 500,350"/>
-                                    <p class="description" style="margin-top: 10px;">Runs from <strong>Grid → Home</strong> (or to Inverter if Solar/Battery active).</p>
-                                </td>
-                            </tr>
-
-                            <!-- House Line — hidden until a module is enabled -->
-                            <tr id="ha-pf-load-line-row" <?php if ( ! $load_visible ) echo 'style="display:none;"'; ?>>
-                                <th>
-                                    <label for="load_line">House Line</label>
-                                    <span class="ha-pf-module-status" style="display:block;margin-top:6px;text-align:center;">Modules active</span>
-                                </th>
-                                <td>
-                                    <input type="text" id="load_line" name="ha_powerflow_options[load_line]"
-                                           value="<?php echo esc_attr( $o['load_line'] ?? '' ); ?>"
-                                           class="widefat" placeholder="M 500,350 L 880,350"/>
-                                    <p class="description" style="margin-top: 10px;">
-                                        Visible only when Solar, Battery, or EV are enabled.<br>
-                                        Runs from <strong>Inverter → House</strong>.
-                                    </p>
-                                </td>
-                            </tr>
-
-                            <!-- PV Line — hidden until Solar module is enabled -->
-                            <tr id="ha-pf-pv-line-row" <?php if ( empty( $o['enable_solar'] ) ) echo 'style="display:none;"'; ?>>
-                                <th>
-                                    <label for="pv_line">PV Line</label>
-                                    <span class="ha-pf-module-status" style="display:block;margin-top:6px;text-align:center;">Solar active</span>
-                                </th>
-                                <td>
-                                    <input type="text" id="pv_line" name="ha_powerflow_options[pv_line]"
-                                           value="<?php echo esc_attr( $o['pv_line'] ?? '' ); ?>"
-                                           class="widefat" placeholder="M 500,150 L 500,350"/>
-                                    <p class="description">
-                                        Visible only when Solar is enabled. Runs from <strong>Solar → Inverter</strong>.<br>
-                                        Set the end point to match the midpoint of your Grid Line.
-                                    </p>
-                                </td>
-                            </tr>
-
-                            <!-- Battery Line — hidden until Battery module is enabled -->
-                            <tr id="ha-pf-battery-line-row" <?php if ( empty( $o['enable_battery'] ) ) echo 'style="display:none;"'; ?>>
-                                <th>
-                                    <label for="battery_line">Battery Line</label>
-                                    <span class="ha-pf-module-status" style="display:block;margin-top:6px;text-align:center;">Battery active</span>
-                                </th>
-                                <td>
-                                    <input type="text" id="battery_line" name="ha_powerflow_options[battery_line]"
-                                           value="<?php echo esc_attr( $o['battery_line'] ?? '' ); ?>"
-                                           class="widefat" placeholder="M 500,350 L 500,550"/>
-                                    <p class="description" style="margin-top: 10px;">
-                                        Visible only when Battery is enabled. Runs from <strong>Inverter ↔ Battery</strong>.<br>
-                                        Direction reverses automatically based on charge / discharge state.
-                                    </p>
-                                </td>
-                            </tr>
-
-                            <!-- EV Line — hidden until EV module is enabled -->
-                            <tr id="ha-pf-ev-line-row" <?php if ( empty( $o['enable_ev'] ) ) echo 'style="display:none;"'; ?>>
-                                <th>
-                                    <label for="ev_line">EV Line</label>
-                                    <span class="ha-pf-module-status" style="display:block;margin-top:6px;text-align:center;">EV active</span>
-                                </th>
-                                <td>
-                                    <input type="text" id="ev_line" name="ha_powerflow_options[ev_line]"
-                                           value="<?php echo esc_attr( $o['ev_line'] ?? '' ); ?>"
-                                           class="widefat" placeholder="M 750,350 L 750,550"/>
-                                    <p class="description" style="margin-top: 10px;">
-                                        Visible only when EV is enabled. Runs from <strong>Inverter → EV</strong>.
-                                    </p>
-                                </td>
-                            </tr>
-
-                            <!-- Heat Pump Line — hidden until Heat Pump module is enabled -->
-                            <tr id="ha-pf-heatpump-line-row" <?php if ( empty( $o['enable_heatpump'] ) ) echo 'style="display:none;"'; ?>>
-                                <th>
-                                    <label for="heatpump_line">Heat Pump Line</label>
-                                    <span class="ha-pf-module-status" style="display:block;margin-top:6px;text-align:center;">Heat Pump active</span>
-                                </th>
-                                <td>
-                                    <input type="text" id="heatpump_line" name="ha_powerflow_options[heatpump_line]"
-                                           value="<?php echo esc_attr( $o['heatpump_line'] ?? '' ); ?>"
-                                           class="widefat" placeholder="M 250,350 L 250,550"/>
-                                    <p class="description" style="margin-top: 10px;">
-                                        Visible only when Heat Pump is enabled. Runs from <strong>Inverter → Heat Pump</strong>.
-                                    </p>
-                                </td>
-                            </tr>
-
+                            <tr><th>Grid Line</th><td><input type="text" name="ha_powerflow_options[grid_line]" value="<?php echo esc_attr( $o['grid_line'] ?? '' ); ?>" class="widefat" /></td></tr>
+                            <tr><th>House Line</th><td><input type="text" name="ha_powerflow_options[load_line]" value="<?php echo esc_attr( $o['load_line'] ?? '' ); ?>" class="widefat" /></td></tr>
                         </table>
-                        <div class="ha-pf-hint">
-                            <strong>Path commands:</strong>
-                            <code>M x,y</code> start &nbsp;·&nbsp; <code>L x,y</code> segment — repeat <code>L</code> for each bend.<br>
-                            Canvas is <strong>1000 × 700</strong>. Leave blank to use the defaults shown in each field.<br>
-                            Example with two bends: <code>M 120,350 L 500,350 L 500,150 L 880,150</code>
+                    </div>
+                </div>
+
+                <div class="ha-pf-col ha-pf-col-right">
+                    <div class="ha-pf-card">
+                        <h2>🏷 Core Label Positions</h2>
+                        <table class="form-table form-table-sm" role="presentation">
+                            <tr><th>Grid</th><td><?php ha_pf_xy( $o, 'grid_label_x', 'grid_label_y', 120, 260 ); ?></td></tr>
+                            <tr><th>Home</th><td><?php ha_pf_xy( $o, 'load_label_x', 'load_label_y', 880, 260 ); ?></td></tr>
+                            <tr><th>Status</th><td><?php ha_pf_xy( $o, 'status_x', 'status_y', 500, 320 ); ?></td></tr>
+                        </table>
+                    </div>
+                    <div class="ha-pf-card">
+                        <h2>🎨 Text Colors</h2>
+                        <table class="form-table form-table-sm" role="presentation">
+                            <tr><th>Title</th><td><input type="text" name="ha_powerflow_options[title_color]" value="<?php echo esc_attr( $o['title_color'] ?? '#8899bb' ); ?>" class="ha-pf-color-picker" /></td></tr>
+                            <tr><th>Power</th><td><input type="text" name="ha_powerflow_options[power_color]" value="<?php echo esc_attr( $o['power_color'] ?? '#f0a500' ); ?>" class="ha-pf-color-picker" /></td></tr>
+                            <tr><th>Energy</th><td><input type="text" name="ha_powerflow_options[energy_color]" value="<?php echo esc_attr( $o['energy_color'] ?? '#6677aa' ); ?>" class="ha-pf-color-picker" /></td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Section 3: Module Settings ────────────────────────────── -->
+            <div class="ha-pf-columns" style="margin-top:32px;">
+                <div class="ha-pf-col ha-pf-col-left">
+                    <div id="ha-pf-section-solar" class="ha-pf-card ha-pf-module-card" data-module="solar">
+                        <h2>☀️ Solar</h2>
+                        <table class="form-table form-table-sm">
+                            <?php ha_pf_entity( $o, 'pv_power', 'PV Power', 'sensor.pv_power' ); ?>
+                            <?php ha_pf_entity( $o, 'pv_energy', 'PV Today', 'sensor.pv_energy' ); ?>
+                            <tr><th>Line Color</th><td><input type="text" name="ha_powerflow_options[pv_color]" value="<?php echo esc_attr( $o['pv_color'] ?? '' ); ?>" class="ha-pf-color-picker" /></td></tr>
+                            <tr><th>PV Line Path</th><td><input type="text" name="ha_powerflow_options[pv_line]" value="<?php echo esc_attr( $o['pv_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td></tr>
+                            <tr><th>Position</th><td><?php ha_pf_xy( $o, 'pv_label_x', 'pv_label_y', 500, 150 ); ?></td></tr>
+                        </table>
+                    </div>
+                    <div id="ha-pf-section-ev" class="ha-pf-card ha-pf-module-card" data-module="ev">
+                        <h2>🚗 EV</h2>
+                        <table class="form-table form-table-sm">
+                            <?php ha_pf_entity( $o, 'ev_power', 'EV Power', 'sensor.ev_power' ); ?>
+                            <?php ha_pf_entity( $o, 'ev_soc',   'EV SOC',   'sensor.ev_soc' ); ?>
+                            <tr><th>EV Line Path</th><td><input type="text" name="ha_powerflow_options[ev_line]" value="<?php echo esc_attr( $o['ev_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td></tr>
+                            <tr><th>Position</th><td><?php ha_pf_xy( $o, 'ev_label_x', 'ev_label_y', 750, 550 ); ?></td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="ha-pf-col ha-pf-col-right">
+                    <div id="ha-pf-section-battery" class="ha-pf-card ha-pf-module-card" data-module="battery">
+                        <h2>🔋 Battery</h2>
+                        <table class="form-table form-table-sm">
+                            <?php ha_pf_entity( $o, 'battery_power', 'Power', 'sensor.battery_power' ); ?>
+                            <?php ha_pf_entity( $o, 'battery_in_energy', 'Energy In', 'sensor.battery_energy_in' ); ?>
+                            <?php ha_pf_entity( $o, 'battery_out_energy', 'Energy Out', 'sensor.battery_energy_out' ); ?>
+                            <?php ha_pf_entity( $o, 'battery_soc', 'SOC', 'sensor.battery_soc' ); ?>
+                            <tr><th>Battery Line Path</th><td><input type="text" name="ha_powerflow_options[battery_line]" value="<?php echo esc_attr( $o['battery_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td></tr>
+                            <tr><th>Position</th><td><?php ha_pf_xy( $o, 'battery_label_x', 'battery_label_y', 500, 550 ); ?></td></tr>
+                        </table>
+                    </div>
+                    <div id="ha-pf-section-heatpump" class="ha-pf-card ha-pf-module-card" data-module="heatpump">
+                        <h2>♨️ Heat Pump</h2>
+                        <table class="form-table form-table-sm">
+                            <?php ha_pf_entity( $o, 'heatpump_power', 'Power', 'sensor.heat_pump_power' ); ?>
+                            <?php ha_pf_entity( $o, 'heatpump_energy', 'Energy Today', 'sensor.heat_pump_energy' ); ?>
+                            <?php ha_pf_entity( $o, 'heatpump_efficiency', 'Efficiency (COP)', 'sensor.heat_pump_cop' ); ?>
+                            <tr><th>HP Line Path</th><td><input type="text" name="ha_powerflow_options[heatpump_line]" value="<?php echo esc_attr( $o['heatpump_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td></tr>
+                            <tr><th>Position</th><td><?php ha_pf_xy( $o, 'heatpump_label_x', 'heatpump_label_y', 250, 550 ); ?></td></tr>
+                        </table>
+                    </div>
+                    <div id="ha-pf-section-weather" class="ha-pf-card ha-pf-module-card" data-module="weather">
+                        <h2>☁️ Weather</h2>
+                        <table class="form-table form-table-sm">
+                            <?php ha_pf_entity( $o, 'weather_entity', 'Weather Entity', 'weather.home' ); ?>
+                            <tr><th>Font Size</th><td><input type="number" name="ha_powerflow_options[weather_font_size]" value="<?php echo (int)($o['weather_font_size'] ?? 13); ?>" class="small-text" /> px</td></tr>
+                            <tr><th>Position</th><td><?php ha_pf_xy( $o, 'weather_x', 'weather_y', 500, 80 ); ?></td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Section 4: Custom HUD ────────────────────────────────── -->
+            <div class="ha-pf-columns" style="margin-top:32px;">
+                <div class="ha-pf-col ha-pf-col-full">
+                    <div class="ha-pf-card">
+                        <h2>✨ Additional HUD Entities</h2>
+                        <p class="description">Add extra sensors to your HUD. They will inherit Title and Power text colors.</p>
+                        
+                        <table class="wp-list-table widefat fixed striped" id="ha-pf-custom-entities-table">
+                            <thead>
+                                <tr>
+                                    <th>Label</th>
+                                    <th>Entity ID</th>
+                                    <th style="width:180px;">Position (X, Y)</th>
+                                    <th style="width:80px;">Visible</th>
+                                    <th style="width:50px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php
+                                $custom = $o['custom_entities'] ?? [];
+                                if ( ! is_array( $custom ) ) $custom = [];
+                                foreach ( $custom as $index => $item ) { ?>
+                                <tr data-index="<?php echo $index; ?>">
+                                    <td><input type="text" name="ha_powerflow_options[custom_entities][<?php echo $index; ?>][label]" value="<?php echo esc_attr( $item['label'] ?? '' ); ?>" class="widefat" placeholder="e.g. Temp" /></td>
+                                    <td><input type="text" name="ha_powerflow_options[custom_entities][<?php echo $index; ?>][entity]" value="<?php echo esc_attr( $item['entity'] ?? '' ); ?>" class="widefat" placeholder="sensor.xyz" /></td>
+                                    <td>
+                                        <div class="ha-pf-xy-group" style="display:flex;align-items:center;gap:5px;">
+                                            <input type="number" name="ha_powerflow_options[custom_entities][<?php echo $index; ?>][x]" value="<?php echo esc_attr( $item['x'] ?? 0 ); ?>" class="small-text" min="0" max="1000" />
+                                            <input type="number" name="ha_powerflow_options[custom_entities][<?php echo $index; ?>][y]" value="<?php echo esc_attr( $item['y'] ?? 0 ); ?>" class="small-text" min="0" max="700" />
+                                            <button type="button" class="ha-pf-coord-picker-btn" title="Pick position from image">🎯</button>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <label class="ha-pf-toggle-label ha-pf-toggle-sm">
+                                            <input type="checkbox" name="ha_powerflow_options[custom_entities][<?php echo $index; ?>][visible]" value="1" <?php checked( ! empty( $item['visible'] ) ); ?>/>
+                                            <span class="ha-pf-slider"></span>
+                                        </label>
+                                    </td>
+                                    <td><button type="button" class="button ha-pf-remove-entity">×</button></td>
+                                </tr>
+                                <?php } ?>
+                            </tbody>
+                        </table>
+                        <div style="margin-top:15px;">
+                            <button type="button" class="button" id="ha-pf-add-entity">+ Add Entity</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Section 5: Maintenance ────────────────────────────────── -->
+            <div class="ha-pf-columns" style="margin-top:32px;">
+                <div class="ha-pf-col ha-pf-col-left">
+                    <div class="ha-pf-card">
+                        <h2>🔄 Snapshots & Restore</h2>
+                        <div class="ha-pf-restore-box">
+                            <p class="description">Automatic snapshots (last 50 kept).</p>
+                            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                                <select id="ha-pf-snapshot-select" style="flex:1;">
+                                    <?php
+                                    $files = glob( HA_POWERFLOW_CONFIG_DIR . 'snapshot_*.yaml' );
+                                    if ( $files ) {
+                                        rsort( $files );
+                                        foreach ( $files as $f ) {
+                                            $bn = basename( $f );
+                                            echo '<option value="' . esc_attr( $bn ) . '">' . esc_html( str_replace(['snapshot_', '.yaml', '_'], ['', '', ' '], $bn) ) . '</option>';
+                                        }
+                                    } else { echo '<option value="">No snapshots found</option>'; }
+                                    ?>
+                                </select>
+                                <button type="button" id="ha-pf-restore-btn" class="button">Restore</button>
+                                <button type="button" id="ha-pf-snapshot-btn" class="button">Take Snapshot Now</button>
+                            </div>
+                            <hr>
+                            <p class="description">Upload .yaml backup.</p>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <input type="file" id="ha-pf-upload-file" accept=".yaml" />
+                                <button type="button" id="ha-pf-upload-btn" class="button">Upload & Restore</button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Label & Status Positions ─────────────────────────── -->
-                    <div class="ha-pf-card">
-                        <h2>🏷 Label &amp; Status Positions &amp; Colors</h2>
-                        <p class="description" style="margin:0 0 12px;">
-                            Customize text colors for the labels below (useful if your background image clashes).
-                        </p>
-                        <table class="form-table form-table-sm" role="presentation" style="margin-bottom: 20px;">
-                            <tr>
-                                <th><label for="title_color">Title Text Color</label></th>
-                                <td>
-                                    <input type="text" id="title_color" name="ha_powerflow_options[title_color]"
-                                           value="<?php echo esc_attr( $o['title_color'] ?? '#8899bb' ); ?>"
-                                           class="ha-pf-color-picker" data-default-color="#8899bb" />
-                                    <p class="description">Color for "GRID", "HOME", etc.</p>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th><label for="power_color">Power Text Color</label></th>
-                                <td>
-                                    <input type="text" id="power_color" name="ha_powerflow_options[power_color]"
-                                           value="<?php echo esc_attr( $o['power_color'] ?? '#f0a500' ); ?>"
-                                           class="ha-pf-color-picker" data-default-color="#f0a500" />
-                                    <p class="description">Color for live power (W/kW).</p>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th><label for="energy_color">Energy/SOC Text Color</label></th>
-                                <td>
-                                    <input type="text" id="energy_color" name="ha_powerflow_options[energy_color]"
-                                           value="<?php echo esc_attr( $o['energy_color'] ?? '#6677aa' ); ?>"
-                                           class="ha-pf-color-picker" data-default-color="#6677aa" />
-                                    <p class="description">Color for total energy (kWh) or battery/EV %. </p>
-                                </td>
-                            </tr>
-                        </table>
-
-                        <p class="description" style="margin:0 0 12px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
-                            All positions are centre-point (x, y) coordinates on the 1000 × 700 canvas.
-                            Use <strong>Debug Mode</strong> to click your image and find exact values.
-                        </p>
-                        <table class="form-table form-table-sm" role="presentation">
-                            <tr>
-                                <th>Grid Label</th>
-                                <td><?php ha_pf_xy( $o, 'grid_label_x', 'grid_label_y', 120, 260, 'GRID name · power · energy block. Default X&nbsp;<code>120</code> Y&nbsp;<code>260</code>' ); ?></td>
-                            </tr>
-                            <tr>
-                                <th>Load Label</th>
-                                <td><?php ha_pf_xy( $o, 'load_label_x', 'load_label_y', 880, 260, 'HOME name · power · energy block. Default X&nbsp;<code>880</code> Y&nbsp;<code>260</code>' ); ?></td>
-                            </tr>
-                            <tr id="ha-pf-pv-label-row" <?php if ( empty( $o['enable_solar'] ) ) echo 'style="display:none;"'; ?>>
-                                <th>PV Label</th>
-                                <td><?php ha_pf_xy( $o, 'pv_label_x', 'pv_label_y', 500, 150, 'SOLAR name · power · energy block. Default X&nbsp;<code>500</code> Y&nbsp;<code>150</code>' ); ?></td>
-                            </tr>
-                            <tr id="ha-pf-battery-label-row" <?php if ( empty( $o['enable_battery'] ) ) echo 'style="display:none;"'; ?>>
-                                <th>Battery Label</th>
-                                <td><?php ha_pf_xy( $o, 'battery_label_x', 'battery_label_y', 500, 550, 'BATTERY name · power · SOC block. Default X&nbsp;<code>500</code> Y&nbsp;<code>550</code>' ); ?></td>
-                            </tr>
-                            <tr id="ha-pf-ev-label-row" <?php if ( empty( $o['enable_ev'] ) ) echo 'style="display:none;"'; ?>>
-                                <th>EV Label</th>
-                                <td><?php ha_pf_xy( $o, 'ev_label_x', 'ev_label_y', 750, 550, 'EV name · power · SOC block. Default X&nbsp;<code>750</code> Y&nbsp;<code>550</code>' ); ?></td>
-                            </tr>
-                            <tr id="ha-pf-heatpump-label-row" <?php if ( empty( $o['enable_heatpump'] ) ) echo 'style="display:none;"'; ?>>
-                                <th>Heat Pump Label</th>
-                                <td><?php ha_pf_xy( $o, 'heatpump_label_x', 'heatpump_label_y', 250, 550, 'HEAT PUMP name · power · efficiency block. Default X&nbsp;<code>250</code> Y&nbsp;<code>550</code>' ); ?></td>
-                            </tr>
-                            <tr>
-                                <th>Status</th>
-                                <td><?php ha_pf_xy( $o, 'status_x', 'status_y', 500, 320, 'IMPORTING / EXPORTING / No flow label. Default X&nbsp;<code>500</code> Y&nbsp;<code>320</code>' ); ?></td>
-                            </tr>
-                        </table>
+                    <div class="ha-pf-card" style="margin-top:24px;">
+                        <h2>📡 Connection Diagnostics</h2>
+                        <div id="ha-pf-diag-panel" style="font-size:13px; line-height:1.6;">
+                            <p><strong>Status:</strong> <span id="ha-pf-diag-status">Checking...</span></p>
+                            <p><strong>Last Response:</strong> <span id="ha-pf-diag-time">—</span></p>
+                            <div id="ha-pf-diag-log" style="margin-top:10px; font-family:monospace; background:#1a202c; color:#a0aec0; padding:12px; border-radius:8px; height:150px; overflow-y:auto;">
+                                [System Ready]
+                            </div>
+                        </div>
+                        <button type="button" id="ha-pf-diag-refresh" class="button" style="margin-top:10px;">Refresh Diagnostics</button>
                     </div>
-
-
-                </div><!-- /left column -->
-
-                <!-- ── RIGHT: optional module sections ──────────────────── -->
-                <div class="ha-pf-col ha-pf-col-right">
-
-                    <div id="ha-pf-section-solar" class="ha-pf-card ha-pf-module-card" data-module="solar" style="display:none;">
-                        <h2>
-                            <span class="ha-pf-module-badge ha-pf-badge-solar">☀️ Solar</span>
-                            <span class="ha-pf-module-status">Enabled</span>
-                        </h2>
-                        <p class="description" style="margin:0 0 12px;">Entity IDs for your solar PV system.</p>
-                        <table class="form-table form-table-sm" role="presentation">
-                            <?php ha_pf_entity( $o, 'pv_power',  'PV Power Entity',  'sensor.pv_power',  'Current solar power output (W / kW).' ); ?>
-                            <?php ha_pf_entity( $o, 'pv_energy', 'PV Energy Entity', 'sensor.pv_energy', 'Total solar energy produced today (kWh).' ); ?>
-                        </table>
-                    </div>
-
-                    <div id="ha-pf-section-battery" class="ha-pf-card ha-pf-module-card" data-module="battery" style="display:none;">
-                        <h2>
-                            <span class="ha-pf-module-badge ha-pf-badge-battery">🔋 Battery</span>
-                            <span class="ha-pf-module-status">Enabled</span>
-                        </h2>
-                        <p class="description" style="margin:0 0 12px;">Entity IDs for your battery storage system.</p>
-                        <table class="form-table form-table-sm" role="presentation">
-                            <?php ha_pf_entity( $o, 'battery_power',      'Battery Power Entity',        'sensor.battery_power',      'Current charge/discharge power (W / kW). Positive = charging, negative = discharging.' ); ?>
-                            <?php ha_pf_entity( $o, 'battery_in_energy',  'Battery Energy In Entity',    'sensor.battery_in_energy',  'Total energy charged into battery today (kWh).' ); ?>
-                            <?php ha_pf_entity( $o, 'battery_out_energy', 'Battery Energy Out Entity',   'sensor.battery_out_energy', 'Total energy discharged from battery today (kWh).' ); ?>
-                            <?php ha_pf_entity( $o, 'battery_soc',        'Battery SOC Entity',          'sensor.battery_soc',        'State of charge (%). Displayed as a percentage.' ); ?>
-                        </table>
-                    </div>
-
-                    <div id="ha-pf-section-ev" class="ha-pf-card ha-pf-module-card" data-module="ev" style="display:none;">
-                        <h2>
-                            <span class="ha-pf-module-badge ha-pf-badge-ev">🚗 EV</span>
-                            <span class="ha-pf-module-status">Enabled</span>
-                        </h2>
-                        <p class="description" style="margin:0 0 12px;">Entity IDs for your electric vehicle charger.</p>
-                        <table class="form-table form-table-sm" role="presentation">
-                            <?php ha_pf_entity( $o, 'ev_power', 'EV Power Entity', 'sensor.ev_power', 'Current EV charging power (W / kW).' ); ?>
-                            <?php ha_pf_entity( $o, 'ev_soc',   'EV SOC Entity',   'sensor.ev_soc',   'EV battery state of charge (%).' ); ?>
-                        </table>
-                    </div>
-
-                    <div id="ha-pf-section-heatpump" class="ha-pf-card ha-pf-module-card" data-module="heatpump" style="display:none;">
-                        <h2>
-                            <span class="ha-pf-module-badge ha-pf-badge-heatpump">♨️ Heat Pump</span>
-                            <span class="ha-pf-module-status">Enabled</span>
-                        </h2>
-                        <p class="description" style="margin:0 0 12px;">Entity IDs for your heat pump.</p>
-                        <table class="form-table form-table-sm" role="presentation">
-                            <?php ha_pf_entity( $o, 'heatpump_power',      'Heat Pump Power Entity',      'sensor.heat_pump_power',            'Current heat pump power consumption (W / kW).' ); ?>
-                            <?php ha_pf_entity( $o, 'heatpump_energy',     'Heat Pump Energy Entity',     'sensor.heat_pump_energy',           'Total heat pump energy consumed today (kWh).' ); ?>
-                            <?php ha_pf_entity( $o, 'heatpump_efficiency', 'Heat Pump Efficiency Entity', 'sensor.heat_pump_efficiency_energy', 'Heat pump COP / efficiency (e.g. 3.5).' ); ?>
-                        </table>
-                    </div>
-
-                    <div class="ha-pf-card ha-pf-placeholder" id="ha-pf-no-modules">
-                        <p>Enable one or more <strong>Optional Modules</strong> above to see their settings here.</p>
-                    </div>
-
-                </div><!-- /right column -->
-
-            </div><!-- /columns -->
+                </div>
+            </div>
 
             <div class="ha-pf-sticky-save-bar">
                 <div style="display:flex; align-items:center; gap:20px;">

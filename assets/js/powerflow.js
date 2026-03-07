@@ -143,8 +143,91 @@
         if (absW <= 100) return '6s';   
         if (absW <= 300) return '4s';   
         if (absW <= 500) return '2s';  
-        if (absW <= 1500) return '1s';  
-        return '0.5s';                  
+        if (absW <= 1500) return '1.2s';  
+        return '0.7s';                  
+    }
+
+    // ── Dynamic Intensity ──────────────────────────────────────────────────
+    function setIntensity(laserEl, absW) {
+        if (!laserEl) return;
+        
+        // Only update if change is significant (> 20W) to prevent flickering jitter
+        var lastW = parseFloat(laserEl.getAttribute('data-last-w') || 0);
+        if (Math.abs(absW - lastW) < 20) return;
+        laserEl.setAttribute('data-last-w', absW);
+
+        // Detect base width if user has overridden it in PHP (e.g. 2.0)
+        var baseWidth = parseFloat(laserEl.getAttribute('data-base-width'));
+        if (isNaN(baseWidth)) {
+            baseWidth = parseFloat(laserEl.getAttribute('stroke-width')) || 1.2;
+            laserEl.setAttribute('data-base-width', baseWidth);
+        }
+
+        var scale = Math.min(3, 1 + (absW / 5000)); 
+        var blur = Math.min(6, 2.5 + (absW / 2000));
+
+        var newWidth = (baseWidth * scale).toFixed(1);
+        if (laserEl.getAttribute('stroke-width') !== newWidth) {
+            laserEl.setAttribute('stroke-width', newWidth);
+        }
+        
+        var newFilter = 'drop-shadow(0 0 ' + blur.toFixed(1) + 'px currentColor)';
+        if (laserEl.style.filter !== newFilter) {
+            $(laserEl).css('filter', newFilter);
+        }
+    }
+
+    function formatWeather(state) {
+        if (!state) return '';
+        var map = {
+            'clear-night':      'Clear',
+            'cloudy':           'Cloudy',
+            'fog':              'Fog',
+            'hail':             'Hail',
+            'lightning':        'Lightning',
+            'lightning-rainy':  'Lightning, rainy',
+            'partlycloudy':     'Partly cloudy',
+            'pouring':          'Pouring',
+            'rainy':            'Rainy',
+            'snowy':            'Snowy',
+            'snowy-rainy':      'Snowy, rainy',
+            'sunny':            'Sunny',
+            'windy':            'Windy',
+            'windy-variant':    'Windy, cloudy',
+            'exceptional':      'Exceptional'
+        };
+        // Normalize: if we have 'clear-night' but user provided 'Clear', we still check map
+        var key = state.toLowerCase();
+        return map[key] || state;
+    }
+
+    function setWeatherIcon(state) {
+        var el = document.getElementById('ha-pf-weather-icon');
+        if (!el) return;
+
+        var key = (state || '').toLowerCase();
+        var iconHtml = '';
+
+        // Geometric Laser-Style Icon Definitions (Centered around 0,0)
+        var icons = {
+            'sunny': '<circle cx="0" cy="0" r="10" /><g class="ha-pf-rotate"><line x1="0" y1="-14" x2="0" y2="-18" /><line x1="0" y1="14" x2="0" y2="18" /><line x1="-14" y1="0" x2="-18" y2="0" /><line x1="14" y1="0" x2="18" y2="0" /><line x1="-10" y1="-10" x2="-13" y2="-13" /><line x1="10" y1="10" x2="13" y2="13" /><line x1="-10" y1="10" x2="-13" y2="13" /><line x1="10" y1="-10" x2="13" y2="-13" /></g>',
+            'clear-night': '<path d="M-10,-5 A12,12 0 1,0 8,10 A9,9 0 0,1 -10,-5" />',
+            'cloudy': '<path d="M-15,5 Q-15,-5 -5,-5 Q-2,-5 0,-2 Q2,-10 10,-10 Q18,-10 18,0 Q18,5 10,5 Z" transform="translate(-2, 0)" />',
+            'partlycloudy': '<circle cx="-6" cy="-6" r="7" /><path d="M-10,5 Q-10,-2 -3,-2 Q0,-2 2,1 Q4,-5 10,-5 Q16,-5 16,3 Q16,8 10,8 Z" transform="translate(0, 2)" />',
+            'rainy': '<path d="M-12,2 Q-12,-6 -4,-6 Q-1,-6 1,-3 Q3,-10 9,-10 Q16,-10 16,0 Q16,5 9,5 L-12,5 Z" transform="translate(-2, -3)" /><line x1="-8" y1="8" x2="-10" y2="14" class="ha-pf-rain" /><line x1="0" y1="8" x2="-2" y2="14" class="ha-pf-rain" /><line x1="8" y1="8" x2="6" y2="14" class="ha-pf-rain" />',
+            'pouring': '<path d="M-12,2 Q-12,-6 -4,-6 Q-1,-6 1,-3 Q3,-10 9,-10 Q16,-10 16,0 Q16,5 9,5 L-12,5 Z" transform="translate(-2, -3)" /><line x1="-8" y1="8" x2="-11" y2="16" stroke-width="1.5" /><line x1="0" y1="8" x2="-3" y2="16" stroke-width="1.5" /><line x1="8" y1="8" x2="5" y2="16" stroke-width="1.5" />',
+            'lightning': '<path d="M-12,2 Q-12,-6 -4,-6 Q-1,-6 1,-3 Q3,-10 9,-10 Q16,-10 16,0 Q16,5 9,5 L-12,5 Z" transform="translate(-2, -3)" /><path d="M0,6 L-4,12 L1,12 L-3,20" stroke-width="1.5" stroke-linejoin="round" />',
+            'lightning-rainy': '<path d="M-12,2 Q-12,-6 -4,-6 Q-1,-6 1,-3 Q3,-10 9,-10 Q16,-10 16,0 Q16,5 9,5 L-12,5 Z" transform="translate(-2, -3)" /><path d="M4,6 L1,12 L6,12 L2,20" stroke-width="1.5" stroke-linejoin="round" /><line x1="-8" y1="8" x2="-10" y2="14" />',
+            'snowy': '<path d="M-12,2 Q-12,-6 -4,-6 Q-1,-6 1,-3 Q3,-10 9,-10 Q16,-10 16,0 Q16,5 9,5 L-12,5 Z" transform="translate(-2, -3)" /><circle cx="-7" cy="11" r="1.5" fill="currentColor" stroke="none" /><circle cx="2" cy="14" r="1.5" fill="currentColor" stroke="none" /><circle cx="10" cy="11" r="1.5" fill="currentColor" stroke="none" />',
+            'snowy-rainy': '<path d="M-12,2 Q-12,-6 -4,-6 Q-1,-6 1,-3 Q3,-10 9,-10 Q16,-10 16,0 Q16,5 9,5 L-12,5 Z" transform="translate(-2, -3)" /><circle cx="-7" cy="11" r="1.5" fill="currentColor" stroke="none" /><line x1="2" y1="10" x2="0" y2="16" /><circle cx="10" cy="11" r="1.5" fill="currentColor" stroke="none" />',
+            'fog': '<line x1="-15" y1="-5" x2="15" y2="-5" /><line x1="-18" y1="2" x2="18" y2="2" /><line x1="-12" y1="9" x2="12" y2="9" />',
+            'windy': '<path d="M-15,-5 Q-5,-15 5,-5 T25,-5" /><path d="M-20,5 Q-10,-5 0,5 T20,5" />',
+            'windy-variant': '<path d="M-10,-5 Q-10,-12 -3,-12 Q0,-12 2,-9 Q4,-15 10,-15 Q16,-15 16,-7 Q16,-2 10,-2 Z" transform="translate(0, 0)" /><path d="M-20,5 Q-10,-5 0,5 T20,5" />',
+            'hail': '<path d="M-12,2 Q-12,-6 -4,-6 Q-1,-6 1,-3 Q3,-10 9,-10 Q16,-10 16,0 Q16,5 9,5 L-12,5 Z" transform="translate(-2, -3)" /><circle cx="-7" cy="12" r="2" fill="currentColor" stroke="none" /><circle cx="2" cy="12" r="2" fill="currentColor" stroke="none" /><circle cx="10" cy="12" r="2" fill="currentColor" stroke="none" />',
+            'exceptional': '<circle cx="0" cy="0" r="12" stroke-dasharray="4 2" />'
+        };
+
+        el.innerHTML = icons[key] || '';
     }
 
     function getPulseCount(absW) {
@@ -154,12 +237,22 @@
         return 4;
     }
 
-    function animateLaser(laserEl, dur, forceRestart, reverse, colorOverride, pulseCount) {
+    function animateLaser(laserEl, dur, forceRestart, reverse, colorOverride, pulseCount, absW) {
         if (!laserEl) return;
 
         pulseCount = pulseCount || 1;
-        laserEl.setAttribute('stroke', colorOverride || globalColor);
-        laserEl.setAttribute('opacity', '1'); 
+        
+        var targetColor = colorOverride || globalColor;
+        if (laserEl.getAttribute('stroke') !== targetColor) {
+            laserEl.setAttribute('stroke', targetColor);
+        }
+        
+        if (laserEl.getAttribute('opacity') !== '1') {
+            laserEl.setAttribute('opacity', '1'); 
+        }
+
+        // Apply intensity
+        setIntensity(laserEl, absW);
 
         var oldDur = laserEl.getAttribute('data-dur');
         var oldPulses = laserEl.getAttribute('data-pulses');
@@ -283,7 +376,7 @@
                 } else {
                     svgText('ha-pf-flow-sub', '');
                 }
-                animateLaser(laserEl, gridDur, gridPathChanged, false, activeGridColor, gridPulses);
+                animateLaser(laserEl, gridDur, gridPathChanged, false, activeGridColor, gridPulses, absGrid);
             } else {
                 svgText('ha-pf-flow-main', 'EXPORTING');
                 svgText('ha-pf-flow-sub', '');
@@ -292,7 +385,7 @@
                 var activeGridColor = gridColor;
                 if (haPowerflow.isCustomGrid !== 'true') activeGridColor = '#2ecc71'; // Default Exporting Green
                 
-                animateLaser(laserEl, gridDur, gridPathChanged, false, activeGridColor, gridPulses);
+                animateLaser(laserEl, gridDur, gridPathChanged, false, activeGridColor, gridPulses, absGrid);
             }
         }
 
@@ -308,7 +401,7 @@
             if (haPowerflow.isCustomHouse !== 'true') activeHouseColor = '#ffffff'; // Default House White
 
             if (loadDur) {
-                animateLaser(loadLaserEl, loadDur, false, false, activeHouseColor, loadPulses);
+                animateLaser(loadLaserEl, loadDur, false, false, activeHouseColor, loadPulses, absLoad);
             } else {
                 stopLaser(loadLaserEl);
             }
@@ -325,7 +418,7 @@
             if (haPowerflow.isCustomPv !== 'true') activePvColor = '#f1c40f'; // Default Solar Gold
 
             if (pvDur) {
-                animateLaser(pvLaserEl, pvDur, false, false, activePvColor, pvPulses);
+                animateLaser(pvLaserEl, pvDur, false, false, activePvColor, pvPulses, absPv);
             } else {
                 stopLaser(pvLaserEl);
             }
@@ -355,7 +448,7 @@
                     batteryLaserEl.setAttribute('d', batPath);
                     batPathChanged = true;
                 }
-                animateLaser(batteryLaserEl, batDur, batPathChanged, false, activeBatColor, batPulses);
+                animateLaser(batteryLaserEl, batDur, batPathChanged, false, activeBatColor, batPulses, absBat);
             } else {
                 stopLaser(batteryLaserEl);
             }
@@ -372,7 +465,7 @@
             if (haPowerflow.isCustomEv !== 'true') activeEvColor = '#349bef'; // Default EV Sky Blue
 
             if (evDur) {
-                animateLaser(evLaserEl, evDur, false, false, activeEvColor, evPulses);
+                animateLaser(evLaserEl, evDur, false, false, activeEvColor, evPulses, absEv);
             } else {
                 stopLaser(evLaserEl);
             }
@@ -389,7 +482,7 @@
             if (haPowerflow.isCustomHp !== 'true') activeHpColor = '#9b59b6'; // Default Heat Pump Purple
 
             if (hpDur) {
-                animateLaser(heatpumpLaserEl, hpDur, false, false, activeHpColor, hpPulses);
+                animateLaser(heatpumpLaserEl, hpDur, false, false, activeHpColor, hpPulses, absHp);
             } else {
                 stopLaser(heatpumpLaserEl);
             }
@@ -436,7 +529,30 @@
                     if (enableHeatpump && !haPowerflow.heatpumpEfficiency) missing.push('Heat Pump Efficiency Entity');
 
                     svgText('ha-pf-grid-power', fmt(d.grid_power.state, d.grid_power.unit));
-                    svgText('ha-pf-grid-energy', fmt(d.grid_energy.state, d.grid_energy.unit));
+                    
+                    // Grid Energy Import
+                    svgText('ha-pf-grid-energy', 'In: ' + fmt(d.grid_energy.state, d.grid_energy.unit));
+
+                    // Grid Energy Export (out) - Conditional Visibility
+                    var showExport = (enableSolar || enableBattery || enableEv);
+                    var $gridEnergyOut = $('#ha-pf-grid-energy-out');
+                    if (showExport) {
+                        $gridEnergyOut.show();
+                        svgText('ha-pf-grid-energy-out', 'Out: ' + fmt(d.grid_energy_out.state, d.grid_energy_out.unit));
+                    } else {
+                        $gridEnergyOut.hide();
+                    }
+
+                    // Grid Prices
+                    svgText('ha-pf-grid-price-in', 'In Price: £' + (parseFloat(d.grid_price_in.state) || 0).toFixed(2));
+                    
+                    var $gridPriceOut = $('#ha-pf-grid-price-out');
+                    if (showExport) {
+                        $gridPriceOut.show();
+                        svgText('ha-pf-grid-price-out', 'Out Price: £' + (parseFloat(d.grid_price_out.state) || 0).toFixed(2));
+                    } else {
+                        $gridPriceOut.hide();
+                    }
                     svgText('ha-pf-load-power', fmt(d.load_power.state, d.load_power.unit));
                     svgText('ha-pf-load-energy', fmt(d.load_energy.state, d.load_energy.unit));
 
@@ -480,6 +596,11 @@
                         pvPowerVal = parseFloat(d.pv_power.state);
                     }
 
+                    if (haPowerflow.enableWeather === 'true' && d.weather) {
+                        svgText('ha-pf-weather', formatWeather(d.weather.state));
+                        setWeatherIcon(d.weather.state);
+                    }
+
                     setFlow({
                         grid: parseFloat(d.grid_power.state),
                         load: parseFloat(d.load_power.state),
@@ -488,6 +609,18 @@
                         ev: evPowerVal,
                         heatpump: hpPowerVal,
                     });
+
+                    // Update custom entities
+                    if (haPowerflow.customEntities && haPowerflow.customEntities.length) {
+                        haPowerflow.customEntities.forEach(function(item, index) {
+                            var entry = d['custom_' + index];
+                            if (entry) {
+                                var val = fmt(entry.state, entry.unit);
+                                var $group = $('#ha-pf-custom-' + index);
+                                $group.find('.ha-pf-custom-value').text(val);
+                            }
+                        });
+                    }
 
                     if (missing.length) {
                         $status.addClass('ha-pf-error').text('⚠ Missing entity IDs: ' + missing.join(', ') + ' — check Settings.');

@@ -18,6 +18,29 @@
     color: #fff;
 }
 
+/* ── Glassmorphism & Glow ──────────────────────────────────────────────── */
+.ha-powerflow-widget text {
+    user-select: none;
+    pointer-events: none;
+}
+
+.ha-powerflow-widget .ha-pf-laser {
+    filter: drop-shadow(0 0 3px currentColor);
+    transition: stroke-width 0.5s, filter 0.5s;
+}
+
+/* Breathing Animation for HUD elements */
+@keyframes ha-pf-breathing {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+.ha-powerflow-widget text[id$="-label"],
+.ha-powerflow-widget .ha-pf-custom-entity text:first-child {
+    animation: ha-pf-breathing 4s ease-in-out infinite;
+}
+
 .ha-powerflow-widget::before {
     content: '';
     position: absolute;

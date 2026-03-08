@@ -1,4 +1,5 @@
 jQuery(document).ready(function ($) {
+    var pfUpdatePreview; // High-level ref to allow cross-function access
 
     // ── Colour picker ──────────────────────────────────────────────────────
     $('.ha-pf-color-picker').wpColorPicker();
@@ -496,6 +497,8 @@ jQuery(document).ready(function ($) {
         $preview.find('#ha-pf-pv-power').text('3.6 kW');
         $preview.find('#ha-pf-battery-soc').text('85%');
         $preview.find('#ha-pf-ev-soc').text('60%');
+        $preview.find('#ha-pf-heatpump-power').text('1.8 kW');
+        $preview.find('#ha-pf-heatpump-efficiency').text('3.2 COP');
         $preview.find('#ha-pf-status').html('✓ Connected (Preview)');
         
         // Dummy Weather
@@ -514,6 +517,7 @@ jQuery(document).ready(function ($) {
             // Sync Background
             var bgUrl = $('#bg_image').val() || haPfAdmin.defaultBg || '';
             $preview.css('background-image', 'url(' + bgUrl + ')');
+            updateImageAnalysis(bgUrl);
 
             // Sync Colors
             $preview.css({
@@ -654,6 +658,7 @@ jQuery(document).ready(function ($) {
 
         // Initialize
         updatePreview();
+        pfUpdatePreview = updatePreview;
     }
 
     // ── Preview Toggle ───────────────────────────────────────────────────
@@ -686,7 +691,89 @@ jQuery(document).ready(function ($) {
         });
     }
 
+    // ── Preview Size Selector ────────────────────────────────────────────
+    function initPreviewSizeSelector() {
+        var $select = $('#ha-pf-preview-size-select');
+        var $container = $('.ha-pf-admin-container');
+        var storageKey = 'ha_pf_preview_size';
+
+        function applySize(size) {
+            // Update the CSS variable on the root document for maximum scope
+            document.documentElement.style.setProperty('--hapf-preview-width', size);
+            $select.val(size);
+            localStorage.setItem(storageKey, size);
+            
+            // Trigger a preview sync if available
+            if (typeof pfUpdatePreview === 'function') {
+                pfUpdatePreview();
+            }
+        }
+
+        // Load saved size or default to 550px
+        var saved = localStorage.getItem(storageKey) || '550px';
+        applySize(saved);
+
+        $select.on('change', function() {
+            applySize($(this).val());
+        });
+    }
+
+    // ── Image Analysis ──────────────────────────────────────────────────
+    function updateImageAnalysis(url) {
+        var $analysis = $('#ha-pf-image-analysis');
+        var $badge = $('#ha-pf-image-size-badge');
+        var $tips = $('#ha-pf-image-tips');
+
+        if (!url) {
+            $analysis.hide();
+            return;
+        }
+
+        $analysis.show();
+
+        // Use a HEAD request to efficiently get file size
+        $.ajax({
+            type: "HEAD",
+            url: url,
+            success: function(data, textStatus, jqXHR) {
+                var size = jqXHR.getResponseHeader('Content-Length');
+                if (!size) {
+                    $badge.text('Unknown');
+                    $tips.html('Could not determine file size.');
+                    return;
+                }
+
+                var kb = Math.round(size / 1024);
+                $badge.text(kb + ' KB');
+
+                var tip = '';
+                var color = '#475569'; // Default slate
+
+                if (kb > 800) {
+                    tip = '⚠️ <strong>Very Large:</strong> This image will slow down your site, especially on mobile. <br/><em>Optimal: Aim for under 300KB using WebP format.</em>';
+                    color = '#e11d48'; // Rose/Red
+                } else if (kb >= 40 && kb <= 400) {
+                    tip = '✅ <strong>Ideal:</strong> This image is perfectly balanced for quality and speed.';
+                    color = '#16a34a'; // Green
+                } else if (kb < 15) {
+                    tip = '⚠️ <strong>Low Quality:</strong> This may look blurry on high-resolution screens. <br/><em>Optimal: Use an image with at least 1000px width.</em>';
+                    color = '#ca8a04'; // Yellow/Orange
+                } else {
+                    tip = 'ℹ️ <strong>Acceptable:</strong> Good size, but check that it looks sharp on all devices.';
+                }
+
+                $tips.html(tip).css('color', color);
+                $badge.css('background', color).css('color', '#fff');
+            },
+            error: function() {
+                $badge.text('Error');
+                $tips.html('Could not reach image file for analysis.');
+            }
+        });
+    }
+
     initPreviewToggle();
     initLivePreview();
+    initPreviewSizeSelector();
 
 });

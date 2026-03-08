@@ -93,7 +93,7 @@ function ha_powerflow_admin_assets( $hook ) {
         'uploadDirUrl'  => $upload_dir['baseurl'] . '/ha-powerflow/',
         'selectImage'   => __( 'Select Image', 'ha-powerflow' ),
         'useImage'      => __( 'Use this image', 'ha-powerflow' ),
-        'defaultBg'     => HA_POWERFLOW_URL . 'assets/images/default_bg.png',
+        'defaultBg'     => HA_POWERFLOW_URL . 'assets/images/ha-powerflow.webp',
     ] );
 }
 
@@ -598,7 +598,15 @@ function ha_powerflow_settings_page() {
             <div class="ha-pf-preview-column">
                 <div class="ha-pf-preview-sticky">
                     <div class="ha-pf-card">
-                        <h2>👁️ Live Preview</h2>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; padding-bottom:16px; border-bottom:2px solid #f1f5f9;">
+                            <h2 style="margin:0; border:none; padding:0;">👁️ Live Preview</h2>
+                            <select id="ha-pf-preview-size-select" style="font-size:12px; height:28px; padding:0 8px;">
+                                <option value="350px">Small (350px)</option>
+                                <option value="550px" selected>Medium (550px)</option>
+                                <option value="750px">Large (750px)</option>
+                                <option value="950px">Extra Large (950px)</option>
+                            </select>
+                        </div>
                         <div id="ha-pf-admin-preview-container">
                             <?php echo HA_Powerflow_Shortcode::render(); ?>
                         </div>
@@ -606,6 +614,15 @@ function ha_powerflow_settings_page() {
                             Changes shown here are <strong>instant</strong>. <br/>
                             Remember to <strong>Save Settings</strong> to apply to the frontend.
                         </p>
+                        <div id="ha-pf-image-analysis" class="ha-pf-card" style="margin-top:15px; padding:12px; font-size:12px; background:#f8fafc; border:1px solid #e2e8f0; display:none;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <strong style="color:#64748b;">🖼️ Image Analysis</strong>
+                                <span id="ha-pf-image-size-badge" style="padding:2px 6px; border-radius:4px; background:#e2e8f0; font-weight:bold; font-family:monospace;">0 KB</span>
+                            </div>
+                            <div id="ha-pf-image-tips" style="color:#475569; line-height:1.4;">
+                                Checking image quality...
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div><!-- .ha-pf-preview-column -->

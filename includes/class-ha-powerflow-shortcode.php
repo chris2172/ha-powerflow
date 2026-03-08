@@ -22,7 +22,7 @@ class HA_Powerflow_Shortcode {
 
         $bg_image = ! empty( $o['bg_image'] )
                     ? esc_url( $o['bg_image'] )
-                    : esc_url( HA_POWERFLOW_URL . 'assets/images/ha-powerflow.png' );
+                    : esc_url( HA_POWERFLOW_URL . 'assets/images/ha-powerflow.webp' );
         $debug    = ! empty( $o['debug'] )    ? 'true' : 'false';
 
         $any_module = ( ! empty( $o['enable_solar'] )    ||
@@ -190,7 +190,7 @@ class HA_Powerflow_Shortcode {
                       stroke-width="2.0" stroke-linecap="round"
                       filter="url(#hapf-glow)" opacity="0"/>
 
-                <?php if ( $any_module ) : ?>
+                <?php if ( is_admin() || $any_module ) : ?>
                 <!-- ── Load Line (Inverter→Home) — visible when modules active ─ -->
                 <path id="ha-pf-load-line"
                       d="<?php echo esc_attr( $load_line ); ?>"
@@ -204,7 +204,7 @@ class HA_Powerflow_Shortcode {
                       filter="url(#hapf-glow)" opacity="0"/>
                 <?php endif; ?>
 
-                <?php if ( ! empty( $o['enable_solar'] ) ) : ?>
+                <?php if ( is_admin() || ! empty( $o['enable_solar'] ) ) : ?>
                 <!-- ── PV Line (Solar→Inverter) — visible when solar is enabled ─ -->
                 <path id="ha-pf-pv-line"
                       d="<?php echo esc_attr( $pv_line ); ?>"
@@ -218,7 +218,7 @@ class HA_Powerflow_Shortcode {
                       filter="url(#hapf-glow)" opacity="0"/>
                 <?php endif; ?>
 
-                <?php if ( ! empty( $o['enable_battery'] ) ) : ?>
+                <?php if ( is_admin() || ! empty( $o['enable_battery'] ) ) : ?>
                 <!-- ── Battery Line (Inverter↔Battery) — visible when battery is enabled ─ -->
                 <path id="ha-pf-battery-line"
                       d="<?php echo esc_attr( $battery_line ); ?>"
@@ -232,7 +232,7 @@ class HA_Powerflow_Shortcode {
                       filter="url(#hapf-glow)" opacity="0"/>
                 <?php endif; ?>
 
-                <?php if ( ! empty( $o['enable_ev'] ) ) : ?>
+                <?php if ( is_admin() || ! empty( $o['enable_ev'] ) ) : ?>
                 <!-- ── EV Line (Inverter→EV) — visible when EV is enabled ─ -->
                 <path id="ha-pf-ev-line"
                       d="<?php echo esc_attr( $ev_line ); ?>"
@@ -246,7 +246,7 @@ class HA_Powerflow_Shortcode {
                       filter="url(#hapf-glow)" opacity="0"/>
                 <?php endif; ?>
 
-                <?php if ( ! empty( $o['enable_heatpump'] ) ) : ?>
+                <?php if ( is_admin() || ! empty( $o['enable_heatpump'] ) ) : ?>
                 <!-- ── Heat Pump Line (Inverter→Heat Pump) — visible when Heat Pump is enabled ─ -->
                 <path id="ha-pf-heatpump-line"
                       d="<?php echo esc_attr( $heatpump_line ); ?>"
@@ -331,7 +331,7 @@ class HA_Powerflow_Shortcode {
                       font-family="'Exo 2', sans-serif" font-size="12"
                       filter="url(#hapf-shadow)">—</text>
 
-                <?php if ( ! empty( $o['enable_solar'] ) ) : ?>
+                <?php if ( is_admin() || ! empty( $o['enable_solar'] ) ) : ?>
                 <!-- ── PV label block ────────────────────────────────────────── -->
                 <text id="ha-pf-pv-title"
                       x="<?php echo $px; ?>" y="<?php echo $py; ?>"
@@ -351,7 +351,7 @@ class HA_Powerflow_Shortcode {
                       filter="url(#hapf-shadow)">—</text>
                 <?php endif; ?>
 
-                <?php if ( ! empty( $o['enable_battery'] ) ) : ?>
+                <?php if ( is_admin() || ! empty( $o['enable_battery'] ) ) : ?>
                 <!-- ── Battery label block ───────────────────────────────────── -->
                 <text id="ha-pf-battery-title"
                       x="<?php echo $bx; ?>" y="<?php echo $by; ?>"
@@ -371,7 +371,7 @@ class HA_Powerflow_Shortcode {
                       filter="url(#hapf-shadow)">—</text>
                 <?php endif; ?>
 
-                <?php if ( ! empty( $o['enable_ev'] ) ) : ?>
+                <?php if ( is_admin() || ! empty( $o['enable_ev'] ) ) : ?>
                 <!-- ── EV label block ────────────────────────────────────────── -->
                 <text id="ha-pf-ev-title"
                       x="<?php echo $ex; ?>" y="<?php echo $ey; ?>"
@@ -391,7 +391,7 @@ class HA_Powerflow_Shortcode {
                       filter="url(#hapf-shadow)">—</text>
                 <?php endif; ?>
 
-                <?php if ( ! empty( $o['enable_heatpump'] ) ) : ?>
+                <?php if ( is_admin() || ! empty( $o['enable_heatpump'] ) ) : ?>
                 <!-- ── Heat Pump label block ─────────────────────────────────── -->
                 <text id="ha-pf-heatpump-title"
                       x="<?php echo $hx2; ?>" y="<?php echo $hy2; ?>"

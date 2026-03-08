@@ -14,11 +14,11 @@
     --hapf-shadow-hover: 0 20px 35px -5px rgba(0, 0, 0, 0.1), 0 10px 15px -5px rgba(0, 0, 0, 0.06);
     --hapf-radius: 16px;
     --hapf-transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    --hapf-preview-width: 380px;
+    --hapf-preview-width: 550px;
 }
 
 .ha-pf-wrap {
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 20px 20px 20px 0;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: var(--hapf-text-main);
@@ -80,6 +80,7 @@
 .ha-pf-settings-column {
     flex: 1;
     min-width: 0;
+    transition: flex 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ha-pf-preview-column {
@@ -87,10 +88,12 @@
     position: sticky;
     top: 100px;
     z-index: 10;
+    transition: flex 0.4s cubic-bezier(0.16, 1, 0.3, 1), width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ha-pf-preview-sticky {
     width: var(--hapf-preview-width);
+    transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 #ha-pf-admin-preview-container .ha-powerflow-widget {

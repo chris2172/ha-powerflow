@@ -27,6 +27,13 @@ function ha_powerflow_activate() {
         wp_mkdir_p( $cfg_dir );
         @file_put_contents( $cfg_dir . '/index.php', "<?php // Silence is golden.\n" );
     }
+    
+    // Always ensure .htaccess exists to block direct access to YAML snapshots
+    $htaccess_path = $cfg_dir . '/.htaccess';
+    if ( ! file_exists( $htaccess_path ) ) {
+        $htaccess_content = "# Protect HA Powerflow Snapshots\nOrder deny,allow\nDeny from all\n";
+        @file_put_contents( $htaccess_path, $htaccess_content );
+    }
 }
 define( 'HA_POWERFLOW_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'HA_POWERFLOW_URL',     plugin_dir_url( __FILE__ ) );

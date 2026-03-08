@@ -388,11 +388,12 @@ function ha_powerflow_settings_page() {
         <ol style="line-height:2">
             <li>Fill in <strong>Connection</strong> details and <strong>Sensor</strong> entity IDs.</li>
             <li>Upload your background image and paste its URL under <strong>Appearance</strong>.</li>
-            <li>Tick <strong>Debug Mode</strong>, save, visit the page with <code>[ha_powerflow]</code>, and click to find coordinates.</li>
+            <li>Tick <strong>Debug Mode</strong>, save, and use the Live Preview above to drag and drop your entities to their correct positions.</li>
             <li>Set your <strong>Grid Line</strong>, <strong>Label</strong> and <strong>Status</strong> positions, then untick Debug Mode.</li>
             <li>Enable optional modules to reveal the <strong>House Line</strong> and each module's settings panel.</li>
         </ol>
-        <p>Shortcode: <code>[ha_powerflow]</code></p>
+        <p>Shortcode (Automated Data): <code>[ha_powerflow]</code></p>
+        <p>Shortcode (Manual Data Entry): <code>[ha_powerflow_manual]</code></p>
     </div>
     <?php
 }

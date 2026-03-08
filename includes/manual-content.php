@@ -374,21 +374,24 @@
             <h2>🚀 4. Advanced HUD Mastery</h2>
             <p>Once you are comfortable, you can use these tools to create a truly professional layout.</p>
             
-            <h3>🎯 Precision Positioning</h3>
-            <p>Don't guess the X and Y numbers! Follow this professional workflow:
+            <h3>🎯 Drag & Drop Positioning <span class="badge badge-new">New</span></h3>
+            <p>Don't guess the X and Y numbers! Positioning entities is now completely interactive:
                 <ol>
-                    <li>Turn on <strong>Live Preview</strong>.</li>
-                    <li>Click the 🎯 <strong>Target Icon</strong> next to any coordinate field (like Grid Position).</li>
-                    <li>A cursor will appear on the preview image. Simply click exactly where you want that label to appear.</li>
-                    <li>The numbers will update automatically!</li>
+                    <li>Turn on <strong>🐛 Debug Mode</strong> at the bottom of the settings page.</li>
+                    <li>Look at your Live Preview canvas.</li>
+                    <li>Simply <strong>click and drag</strong> any entity label, module icon, or custom sensor exactly where you want it.</li>
+                    <li>The coordinate numbers in the settings panel will update automatically when you drop it!</li>
                 </ol>
             </p>
 
             <h3>Additional Entities</h3>
             <p>Want to show your swimming pool temperature or the humidity in your greenhouse? Use the <strong>"Additional HUD Entities"</strong> section. You can add unlimited extra sensors and place them anywhere on the screen.</p>
 
-            <h3>Snapshots & Backup</h3>
-            <p>Every time you click "Save", the plugin creates a <strong>Snapshot</strong>. If you make a mistake or don't like a new layout, go to the "Snapshots" section, pick a previous time, and click <strong>Restore</strong>. You'll be back to your old settings in seconds.</p>
+            <h3>Snapshots & Encrypted Backups</h3>
+            <p>Every time you click "Save", the plugin creates an automatic <strong>Snapshot</strong>. If you make a mistake or don't like a new layout, go to the "Maintenance" tab, pick a previous time, and click <strong>Restore</strong>.</p>
+            <div class="tip">
+                <strong>🔒 Security First:</strong> Your Home Assistant Access Token and URL are automatically strongly encrypted using <code>AES-256</code> before being saved to any snapshot backup file. 
+            </div>
         </div>
     </section>
 

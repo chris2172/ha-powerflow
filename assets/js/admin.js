@@ -395,8 +395,55 @@ jQuery(document).ready(function ($) {
 
     $(document).on('click', '.ha-pf-use-ent', function() {
         var id = $(this).data('id');
-        alert('Entity ID ' + id + ' copied! Please paste it into the appropriate field.');
+        var $btn = $(this);
+        
+        function showSuccess() {
+            var oldText = $btn.text();
+            $btn.text('Copied!');
+            $btn.css({'background-color': '#10b981', 'color': 'white', 'border-color': '#10b981'});
+            setTimeout(function() {
+                $btn.text(oldText);
+                $btn.css({'background-color': '', 'color': '', 'border-color': ''});
+            }, 2000);
+        }
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(id).then(showSuccess).catch(function(err) {
+                console.error("Clipboard API failed: ", err);
+                fallbackCopyTextToClipboard(id, showSuccess);
+            });
+        } else {
+            fallbackCopyTextToClipboard(id, showSuccess);
+        }
     });
+
+    function fallbackCopyTextToClipboard(text, onSuccess) {
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+        
+        // Avoid scrolling to bottom
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.position = "fixed";
+
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+            var successful = document.execCommand('copy');
+            if (successful && onSuccess) {
+                onSuccess();
+            } else {
+                alert('Entity ID ' + text + ' selected. (Clipboard copy failed, please copy manually).');
+            }
+        } catch (err) {
+            console.error('Fallback: Oops, unable to copy', err);
+            alert('Entity ID ' + text + ' selected. (Clipboard copy failed, please copy manually).');
+        }
+
+        document.body.removeChild(textArea);
+    }
 
     // ── Diagnostics Dashboard ─────────────────────────────────────────────
     function refreshDiags() {
@@ -432,21 +479,8 @@ jQuery(document).ready(function ($) {
         var $preview = $('#ha-pf-admin-preview-container .ha-powerflow-widget');
         if (!$preview.length) return;
 
-        // Populate preview with some dummy data for realism
-        $preview.find('#ha-pf-flow-main').text('EXPORTING');
-        $preview.find('#ha-pf-flow-sub').text('2.4 kW');
-        $preview.find('#ha-pf-grid-power').text('2.4 kW');
-        $preview.find('#ha-pf-load-power').text('1.2 kW');
-        $preview.find('#ha-pf-pv-power').text('3.6 kW');
-        $preview.find('#ha-pf-battery-soc').text('85%');
-        $preview.find('#ha-pf-ev-soc').text('60%');
-        $preview.find('#ha-pf-heatpump-power').text('1.8 kW');
-        $preview.find('#ha-pf-heatpump-efficiency').text('3.2 COP');
-        $preview.find('#ha-pf-status').html('✓ Connected (Preview)');
-        
-        // Dummy Weather
-        $preview.find('#ha-pf-weather').text('SUNNY');
-        $preview.find('#ha-pf-weather-icon').html('<circle cx="0" cy="0" r="10" /><g class="ha-pf-rotate"><line x1="0" y1="-14" x2="0" y2="-18" /><line x1="0" y1="14" x2="0" y2="18" /><line x1="-14" y1="0" x2="-18" y2="0" /><line x1="14" y1="0" x2="18" y2="0" /><line x1="-10" y1="-10" x2="-13" y2="-13" /><line x1="10" y1="10" x2="13" y2="13" /><line x1="-10" y1="10" x2="-13" y2="13" /><line x1="10" y1="-10" x2="13" y2="-13" /></g>');
+        // Note: powerflow.js now handles simulated text values and animations
+        // while in isPreview mode. initLivePreview focuses on real-time layout syncing.
 
         function updatePreview() {
             var options = {};
@@ -625,6 +659,167 @@ jQuery(document).ready(function ($) {
         // Initialize
         updatePreview();
         pfUpdatePreview = updatePreview;
+    }
+
+    // ── Drag and Drop Coordinates ──────────────────────────────────────────
+    function initDragAndDrop() {
+        var svgEl = document.getElementById('ha-pf-svg');
+        if (!svgEl) return;
+
+        var dragging = null;
+        var offset = { x: 0, y: 0 };
+        var $xInput = null;
+        var $yInput = null;
+        var startX = 0;
+        var startY = 0;
+
+        // Make draggable elements visually distinct on hover and override pointer-events
+        var style = document.createElement('style');
+        style.innerHTML = '.ha-powerflow-widget .ha-pf-draggable { cursor: grab; pointer-events: all; } ' + 
+                          '.ha-powerflow-widget .ha-pf-draggable text { cursor: grab; pointer-events: all !important; } ' + 
+                          '.ha-powerflow-widget .ha-pf-draggable:active, .ha-powerflow-widget .ha-pf-draggable:active text { cursor: grabbing !important; }';
+        document.head.appendChild(style);
+
+        function getMousePosition(evt) {
+            var CTM = svgEl.getScreenCTM();
+            return {
+                x: (evt.clientX - CTM.e) / CTM.a,
+                y: (evt.clientY - CTM.f) / CTM.d
+            };
+        }
+
+        $(svgEl).on('mousedown', '.ha-pf-draggable', function(evt) {
+            if ($('.ha-powerflow-widget').attr('data-debug') === 'true') return; // Don't interfere with raw debug click
+            
+            dragging = evt.currentTarget;
+            var id = dragging.id;
+            
+            // Map ID to input fields
+            var xName = '';
+            var yName = '';
+            
+            if (id === 'ha-pf-grid-group') { xName = 'grid_label_x'; yName = 'grid_label_y'; }
+            else if (id === 'ha-pf-load-group') { xName = 'load_label_x'; yName = 'load_label_y'; }
+            else if (id === 'ha-pf-flow-label') { xName = 'status_x'; yName = 'status_y'; }
+            else if (id === 'ha-pf-weather-icon-group' || id === 'ha-pf-weather') { xName = 'weather_x'; yName = 'weather_y'; }
+            else if (id === 'ha-pf-pv-group') { xName = 'pv_label_x'; yName = 'pv_label_y'; }
+            else if (id === 'ha-pf-battery-group') { xName = 'battery_label_x'; yName = 'battery_label_y'; }
+            else if (id === 'ha-pf-ev-group') { xName = 'ev_label_x'; yName = 'ev_label_y'; }
+            else if (id === 'ha-pf-heatpump-group') { xName = 'heatpump_label_x'; yName = 'heatpump_label_y'; }
+            else if (id.startsWith('ha-pf-custom-')) {
+                var idx = id.split('-').pop();
+                xName = 'custom_entities][' + idx + '][x';
+                yName = 'custom_entities][' + idx + '][y';
+            }
+            
+            if (!xName) {
+                dragging = null;
+                return;
+            }
+
+            $xInput = $('[name="ha_powerflow_options[' + xName + ']"]');
+            $yInput = $('[name="ha_powerflow_options[' + yName + ']"]');
+            
+            if (!$xInput.length || !$yInput.length) {
+                dragging = null;
+                return;
+            }
+
+            // Calculate SVG coordinates
+            var mousePos = getMousePosition(evt);
+            
+            // Current input values
+            startX = parseInt($xInput.val()) || 0;
+            startY = parseInt($yInput.val()) || 0;
+
+            // Offset difference between exact mouse click and the label center
+            offset.x = startX - mousePos.x;
+            offset.y = startY - mousePos.y;
+
+            evt.preventDefault();
+            evt.stopPropagation();
+        });
+
+        $(window).on('mousemove', function(evt) {
+            if (!dragging) return;
+            
+            var mousePos = getMousePosition(evt);
+            var newX = Math.round(mousePos.x + offset.x);
+            var newY = Math.round(mousePos.y + offset.y);
+            
+            // Snap limits
+            newX = Math.max(-200, Math.min(1200, newX));
+            newY = Math.max(-200, Math.min(900, newY));
+
+            // Instant visual feedback based on element type
+            if (dragging.tagName.toLowerCase() === 'text') {
+                $(dragging).attr('x', newX);
+                // Sub-elements might need updates if they exist
+                if ($(dragging).find('tspan').length) {
+                    $(dragging).find('tspan').attr('x', newX);
+                    // Update second tspan dy specifically if flow sub exists
+                    var $sub = $(dragging).find('#ha-pf-flow-sub');
+                    if ($sub.length) $sub.attr('x', newX);
+                } else if (dragging.id === 'ha-pf-flow-label' || dragging.id === 'ha-pf-weather') {
+                    // Weather or flow label
+                    if (dragging.id === 'ha-pf-weather') $(dragging).attr('x', newX).attr('y', newY + 5);
+                    else $(dragging).attr('x', newX).attr('y', newY);
+                }
+            } else if (dragging.tagName.toLowerCase() === 'g') {
+                // If the group uses transform translate
+                if (dragging.hasAttribute('transform')) {
+                    // Weather icon requires offset in Y
+                    if (dragging.id === 'ha-pf-weather-icon-group') {
+                        $(dragging).attr('transform', 'translate(' + newX + ', ' + (newY - 30) + ')');
+                        // Also automatically update the associated weather text if visible
+                        $('#ha-pf-weather').attr('x', newX).attr('y', newY + 5);
+                    } else {
+                        $(dragging).attr('transform', 'translate(' + newX + ', ' + newY + ')');
+                    }
+                } 
+                // Group holding just text elements inside
+                else {
+                    var $texts = $(dragging).find('text');
+                    $texts.each(function() {
+                        var id = this.id;
+                        var isPower = id.includes('-power');
+                        var isEnergy = id.includes('-energy') && !id.includes('-energy-out');
+                        var isSoc = id.includes('-soc') || id.includes('-efficiency');
+                        var isPriceIn = id.includes('-price-in');
+                        var isPriceOut = id.includes('-price-out');
+                        var isEnergyOut = id.includes('-energy-out');
+                        
+                        var dy = 0;
+                        if (isPower) dy = 24;
+                        else if (isEnergy) dy = 44;
+                        else if (isSoc && !isEnergy) dy = 44;
+                        else if (isEnergyOut) dy = 58;
+                        else if (isPriceIn) dy = 72;
+                        else if (isPriceOut) dy = 86;
+                        
+                        $(this).attr('x', newX).attr('y', newY + dy);
+                    });
+                }
+            }
+
+            // Update respective input values cleanly
+            $xInput.val(newX);
+            $yInput.val(newY);
+            
+            evt.preventDefault();
+        });
+
+        $(window).on('mouseup', function(evt) {
+            if (dragging) {
+                dragging = null;
+                // Trigger change to sync all lines naturally via existing pfUpdatePreview()
+                if (typeof pfUpdatePreview === 'function') {
+                    pfUpdatePreview();
+                    // Optional trigger generic change
+                    $xInput.trigger('change');
+                }
+            }
+        });
     }
 
     // ── Preview Toggle ───────────────────────────────────────────────────
@@ -1006,5 +1201,6 @@ jQuery(document).ready(function ($) {
     initTabs();
     initThemePresets();
     initHealthDashboard();
+    initDragAndDrop();
 
 });

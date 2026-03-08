@@ -394,6 +394,32 @@ class HA_Powerflow_Ajax {
         ];
     }
 
+    private static function decrypt_string( $string ) {
+        if ( strpos( $string, 'ENC:' ) !== 0 ) {
+            return $string;
+        }
+        
+        $encoded = substr( $string, 4 );
+        $decoded = base64_decode( $encoded );
+        if ( $decoded === false ) return '';
+        
+        $method = 'aes-256-cbc';
+        $iv_length = openssl_cipher_iv_length( $method );
+        
+        if ( strlen( $decoded ) < $iv_length ) return '';
+        
+        $iv = substr( $decoded, 0, $iv_length );
+        $encrypted = substr( $decoded, $iv_length );
+        
+        $key = defined( 'SECURE_AUTH_KEY' ) ? SECURE_AUTH_KEY : 'ha_powerflow_fallback_key';
+        $salt = defined( 'SECURE_AUTH_SALT' ) ? SECURE_AUTH_SALT : 'ha_powerflow_fallback_salt';
+        $encryption_key = hash( 'sha256', $key . $salt, true );
+        
+        $decrypted = openssl_decrypt( $encrypted, $method, $encryption_key, 0, $iv );
+        
+        return $decrypted !== false ? $decrypted : '';
+    }
+
     private static function parse_yaml( $content ) {
         $lines = explode( "\n", $content );
         $data = [];
@@ -414,6 +440,11 @@ class HA_Powerflow_Ajax {
             }
             // Unescape quotes
             $val = str_replace( '\"', '"', $val );
+            
+            // Auto-decrypt if it has the ENC: prefix
+            if ( strpos( $val, 'ENC:' ) === 0 ) {
+                $val = self::decrypt_string( $val );
+            }
             
             $data[ $key ] = $val;
         }

@@ -203,6 +203,20 @@
     vertical-align: middle;
 }
 
+#ha-pf-custom-entities-table .ha-pf-col-label { width: 120px; }
+#ha-pf-custom-entities-table .ha-pf-col-entity { width: auto; }
+#ha-pf-custom-entities-table .ha-pf-col-pos { width: 240px; }
+#ha-pf-custom-entities-table .ha-pf-col-visible { width: 100px; }
+
+#ha-pf-custom-entities-table input.widefat {
+    width: 100%;
+}
+
+#ha-pf-custom-entities-table .ha-pf-label-input {
+    width: 120px;
+}
+
+
 .ha-pf-toggle-sm .ha-pf-slider {
     width: 40px;
     height: 22px;

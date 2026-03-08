@@ -5,12 +5,15 @@ class HA_Powerflow_Shortcode {
 
     public static function init() {
         add_action( 'wp_enqueue_scripts', [ __CLASS__, 'register_assets' ] );
+        add_action( 'admin_enqueue_scripts', [ __CLASS__, 'register_assets' ] );
         add_shortcode( 'ha_powerflow', [ __CLASS__, 'render' ] );
     }
 
     public static function register_assets() {
         wp_register_style( 'ha-powerflow-fonts', 'https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700&family=Orbitron:wght@400;700;900&display=swap', [], HA_POWERFLOW_VERSION );
         wp_register_style( 'ha-powerflow-style',  HA_POWERFLOW_URL . 'assets/css/style.css',     [ 'ha-powerflow-fonts' ], HA_POWERFLOW_VERSION );
+        
+        // Register powerflow.js with global handle
         wp_register_script( 'ha-powerflow-script', HA_POWERFLOW_URL . 'assets/js/powerflow.js', [ 'jquery' ], HA_POWERFLOW_VERSION, true );
     }
 
@@ -141,12 +144,13 @@ class HA_Powerflow_Shortcode {
             $css_vars .= " --ha-pf-{$prefix}-color: " . esc_attr($color) . ";";
         }
 
+        wp_add_inline_style( 'ha-powerflow-style', ".ha-powerflow-widget { {$css_vars} }" );
         wp_localize_script( 'ha-powerflow-script', 'haPowerflow', $localized_data );
 
         ob_start(); ?>
         <div class="ha-powerflow-widget"
              data-debug="<?php echo esc_attr( $debug ); ?>"
-             style="background-image:url(<?php echo $bg_image; ?>); <?php echo $css_vars; ?>">
+             style="background-image:url(<?php echo $bg_image; ?>);">
 
             <div class="ha-pf-debug-bar" id="ha-pf-debug-bar">
                 🐛 Debug Mode &nbsp;|&nbsp; Click anywhere on the widget to read SVG coordinates
@@ -230,7 +234,7 @@ class HA_Powerflow_Shortcode {
 
                 <?php if ( is_admin() || ! empty( $o['enable_weather'] ) ) : ?>
                 <!-- ── Weather Icon ─────────────────────────────────── -->
-                <g id="ha-pf-weather-icon-group" transform="translate(<?php echo $wx; ?>, <?php echo $wy - 30; ?>)" style="<?php echo empty($o['enable_weather']) ? 'display:none;' : ''; ?>">
+                <g id="ha-pf-weather-icon-group" class="ha-pf-draggable" transform="translate(<?php echo $wx; ?>, <?php echo $wy - 30; ?>)" style="<?php echo empty($o['enable_weather']) ? 'display:none;' : ''; ?>">
                      <g id="ha-pf-weather-icon" 
                         fill="none" 
                         stroke-width="2.0" 
@@ -239,7 +243,7 @@ class HA_Powerflow_Shortcode {
                 <?php endif; ?>
 
                 <!-- ── Status label ──────────────────────────────────────────── -->
-                <text id="ha-pf-flow-label"
+                <text id="ha-pf-flow-label" class="ha-pf-draggable"
                       x="<?php echo $sx; ?>" y="<?php echo $sy; ?>"
                       text-anchor="middle"
                       font-family="'Exo 2', sans-serif"
@@ -250,54 +254,58 @@ class HA_Powerflow_Shortcode {
                 </text>
 
                 <!-- ── Grid label block ──────────────────────────────────────── -->
-                <text id="ha-pf-grid-title"
-                      x="<?php echo $gx; ?>" y="<?php echo $gy; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif"
-                      font-size="11" font-weight="700" letter-spacing="2"
-                      filter="url(#hapf-shadow)">GRID</text>
-                <text id="ha-pf-grid-power"
-                      x="<?php echo $gx; ?>" y="<?php echo $gy + 24; ?>"
-                      text-anchor="middle"
-                      font-family="Orbitron, sans-serif" font-size="19" font-weight="700"
-                      filter="url(#hapf-shadow)">—</text>
-                <text id="ha-pf-grid-energy"
-                      x="<?php echo $gx; ?>" y="<?php echo $gy + 44; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif" font-size="12"
-                      filter="url(#hapf-shadow)">—</text>
-                <text id="ha-pf-grid-energy-out"
-                      x="<?php echo $gx; ?>" y="<?php echo $gy + 58; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif" font-size="12"
-                      filter="url(#hapf-shadow)" style="display:none;">—</text>
-                <text id="ha-pf-grid-price-in"
-                      x="<?php echo $gx; ?>" y="<?php echo $gy + 72; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif" font-size="12"
-                      filter="url(#hapf-shadow)">—</text>
-                <text id="ha-pf-grid-price-out"
-                      x="<?php echo $gx; ?>" y="<?php echo $gy + 86; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif" font-size="12"
-                      filter="url(#hapf-shadow)" style="display:none;">—</text>
+                <g id="ha-pf-grid-group" class="ha-pf-draggable">
+                    <text id="ha-pf-grid-title"
+                          x="<?php echo $gx; ?>" y="<?php echo $gy; ?>"
+                          text-anchor="middle"
+                          font-family="'Exo 2', sans-serif"
+                          font-size="11" font-weight="700" letter-spacing="2"
+                          filter="url(#hapf-shadow)">GRID</text>
+                    <text id="ha-pf-grid-power"
+                          x="<?php echo $gx; ?>" y="<?php echo $gy + 24; ?>"
+                          text-anchor="middle"
+                          font-family="Orbitron, sans-serif" font-size="19" font-weight="700"
+                          filter="url(#hapf-shadow)">—</text>
+                    <text id="ha-pf-grid-energy"
+                          x="<?php echo $gx; ?>" y="<?php echo $gy + 44; ?>"
+                          text-anchor="middle"
+                          font-family="'Exo 2', sans-serif" font-size="12"
+                          filter="url(#hapf-shadow)">—</text>
+                    <text id="ha-pf-grid-energy-out"
+                          x="<?php echo $gx; ?>" y="<?php echo $gy + 58; ?>"
+                          text-anchor="middle"
+                          font-family="'Exo 2', sans-serif" font-size="12"
+                          filter="url(#hapf-shadow)" style="display:none;">—</text>
+                    <text id="ha-pf-grid-price-in"
+                          x="<?php echo $gx; ?>" y="<?php echo $gy + 72; ?>"
+                          text-anchor="middle"
+                          font-family="'Exo 2', sans-serif" font-size="12"
+                          filter="url(#hapf-shadow)">—</text>
+                    <text id="ha-pf-grid-price-out"
+                          x="<?php echo $gx; ?>" y="<?php echo $gy + 86; ?>"
+                          text-anchor="middle"
+                          font-family="'Exo 2', sans-serif" font-size="12"
+                          filter="url(#hapf-shadow)" style="display:none;">—</text>
+                </g>
 
                 <!-- ── Load label block ──────────────────────────────────────── -->
-                <text id="ha-pf-home-label" x="<?php echo $hx; ?>" y="<?php echo $hy; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif"
-                      font-size="11" font-weight="700" letter-spacing="2"
-                      filter="url(#hapf-shadow)">HOUSE</text>
-                <text id="ha-pf-load-power"
-                      x="<?php echo $hx; ?>" y="<?php echo $hy + 24; ?>"
-                      text-anchor="middle"
-                      font-family="Orbitron, sans-serif" font-size="19" font-weight="700"
-                      filter="url(#hapf-shadow)">—</text>
-                <text id="ha-pf-load-energy"
-                      x="<?php echo $hx; ?>" y="<?php echo $hy + 44; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif" font-size="12"
-                      filter="url(#hapf-shadow)">—</text>
+                <g id="ha-pf-load-group" class="ha-pf-draggable">
+                    <text id="ha-pf-home-label" x="<?php echo $hx; ?>" y="<?php echo $hy; ?>"
+                          text-anchor="middle"
+                          font-family="'Exo 2', sans-serif"
+                          font-size="11" font-weight="700" letter-spacing="2"
+                          filter="url(#hapf-shadow)">HOUSE</text>
+                    <text id="ha-pf-load-power"
+                          x="<?php echo $hx; ?>" y="<?php echo $hy + 24; ?>"
+                          text-anchor="middle"
+                          font-family="Orbitron, sans-serif" font-size="19" font-weight="700"
+                          filter="url(#hapf-shadow)">—</text>
+                    <text id="ha-pf-load-energy"
+                          x="<?php echo $hx; ?>" y="<?php echo $hy + 44; ?>"
+                          text-anchor="middle"
+                          font-family="'Exo 2', sans-serif" font-size="12"
+                          filter="url(#hapf-shadow)">—</text>
+                </g>
 
                 <?php
                 // Render Module Labels
@@ -305,7 +313,7 @@ class HA_Powerflow_Shortcode {
                     $id_prefix = $all_modules[$key]['id_prefix'];
                     $visible = is_admin() || $m['enabled'];
                     if ( $visible ) : ?>
-                    <g id="ha-pf-<?php echo $id_prefix; ?>-group">
+                    <g id="ha-pf-<?php echo $id_prefix; ?>-group" class="ha-pf-draggable">
                         <text id="ha-pf-<?php echo $id_prefix; ?>-title"
                               x="<?php echo $m['x']; ?>" y="<?php echo $m['y']; ?>"
                               text-anchor="middle"
@@ -341,7 +349,7 @@ class HA_Powerflow_Shortcode {
                 endforeach; ?>
 
                 <?php if ( is_admin() || ! empty( $o['enable_weather'] ) ) : ?>
-                <text id="ha-pf-weather"
+                <text id="ha-pf-weather" class="ha-pf-draggable"
                       x="<?php echo $wx; ?>" y="<?php echo $wy + 5; ?>"
                       text-anchor="middle"
                       font-family="'Exo 2', sans-serif"
@@ -353,12 +361,12 @@ class HA_Powerflow_Shortcode {
                 <?php
                 if ( ! empty( $o['custom_entities'] ) && is_array( $o['custom_entities'] ) ) {
                     foreach ( $o['custom_entities'] as $index => $item ) {
-                        if ( empty( $item['visible'] ) ) continue;
+                        if ( ! is_admin() && empty( $item['visible'] ) ) continue;
                         $cx = (int) $item['x'];
                         $cy = (int) $item['y'];
                         $label = esc_html( $item['label'] );
                         ?>
-                        <g class="ha-pf-custom-entity" id="ha-pf-custom-<?php echo $index; ?>" transform="translate(<?php echo $cx; ?>, <?php echo $cy; ?>)">
+                        <g class="ha-pf-custom-entity ha-pf-draggable" id="ha-pf-custom-<?php echo $index; ?>" transform="translate(<?php echo $cx; ?>, <?php echo $cy; ?>)">
                             <text text-anchor="middle"
                                   font-family="'Exo 2', sans-serif" font-size="11" font-weight="700" letter-spacing="2"
                                   filter="url(#hapf-shadow)"><?php echo strtoupper($label); ?></text>

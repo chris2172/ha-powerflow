@@ -60,6 +60,16 @@
     transition: stroke-width 0.5s, filter 0.5s;
 }
 
+@keyframes ha-pf-overload {
+    0% { opacity: 1; filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+    50% { opacity: 0.8; filter: drop-shadow(0 0 15px currentColor) brightness(1.8); }
+    100% { opacity: 1; filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+}
+
+.ha-pf-laser.overload {
+    stroke-width: 5px !important;
+}
+
 /* Breathing Animation for HUD elements */
 @keyframes ha-pf-breathing {
     0% { opacity: 0.6; }

@@ -3,14 +3,14 @@
  * Plugin Name: HA Powerflow
  * Plugin URI:  https://github.com/chris2172/ha-powerflow
  * Description: Display live Home Assistant power flow on your WordPress site using [ha_powerflow]
- * Version:     2.1.0
+ * Version:     2.2.0
  * Author:      HA Powerflow
  * License:     GPL2
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'HA_POWERFLOW_VERSION', '2.1.0' );
+define( 'HA_POWERFLOW_VERSION', '2.2.0' );
 
 // ── Activation: create uploads folder ────────────────────────────────────────
 register_activation_hook( __FILE__, 'ha_powerflow_activate' );
@@ -52,8 +52,12 @@ function ha_powerflow_pwa_headers() {
     <link rel="manifest" href="<?php echo HA_POWERFLOW_URL; ?>assets/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Powerflow">
     <meta name="theme-color" content="#0f172a">
     <link rel="apple-touch-icon" href="<?php echo HA_POWERFLOW_URL; ?>assets/images/icons/pwa-icon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="<?php echo HA_POWERFLOW_URL; ?>assets/images/icons/pwa-icon-192.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="<?php echo HA_POWERFLOW_URL; ?>assets/images/icons/pwa-icon-192.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="<?php echo HA_POWERFLOW_URL; ?>assets/images/icons/pwa-icon-192.png">
     <?php
 }
 

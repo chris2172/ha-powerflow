@@ -3,7 +3,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 add_action( 'admin_menu', 'ha_powerflow_admin_menu' );
 function ha_powerflow_admin_menu() {
-    add_menu_page(
+    $hook = add_menu_page(
         'HA Powerflow Settings',
         'HA Powerflow',
         'manage_options',
@@ -11,6 +11,22 @@ function ha_powerflow_admin_menu() {
         'ha_powerflow_settings_page',
         'dashicons-chart-area'
     );
+    add_submenu_page(
+        'ha-powerflow',
+        'HA Powerflow Settings',
+        'HA Powerflow',
+        'manage_options',
+        'ha-powerflow',
+        'ha_powerflow_settings_page'
+    );
+
+    // Guarantee that the global $title is never null before admin-header.php renders it.
+    add_action( "load-$hook", function() {
+        global $title;
+        if ( $title === null ) {
+            $title = 'HA Powerflow Settings';
+        }
+    });
 }
 
 add_action( 'admin_init', 'ha_powerflow_register_settings' );
@@ -66,6 +82,8 @@ function ha_powerflow_admin_assets( $hook ) {
     wp_enqueue_media();
     wp_enqueue_style( 'wp-color-picker' );
     wp_enqueue_style( 'ha-powerflow-admin-style', HA_POWERFLOW_URL . 'assets/css/admin.css', [], HA_POWERFLOW_VERSION );
+    // Enqueue frontend styles for the preview
+    wp_enqueue_style( 'ha-powerflow-style', HA_POWERFLOW_URL . 'assets/css/style.css', [], HA_POWERFLOW_VERSION );
     wp_enqueue_script( 'ha-powerflow-admin', HA_POWERFLOW_URL . 'assets/js/admin.js', [ 'wp-color-picker', 'jquery' ], HA_POWERFLOW_VERSION, true );
 
     $upload_dir = wp_upload_dir();
@@ -204,8 +222,7 @@ function ha_pf_any_module( $o ) {
     return ! empty( $o['enable_solar'] )    ||
            ! empty( $o['enable_battery'] )  ||
            ! empty( $o['enable_ev'] )       ||
-           ! empty( $o['enable_heatpump'] ) ||
-           ! empty( $o['enable_weather'] );
+           ! empty( $o['enable_heatpump'] );
 }
 
 function ha_powerflow_settings_page() {
@@ -218,7 +235,9 @@ function ha_powerflow_settings_page() {
     <div class="wrap ha-pf-wrap">
         <h1>⚡ HA Powerflow <span class="ha-pf-version">v<?php echo HA_POWERFLOW_VERSION; ?></span></h1>
 
-        <form method="post" action="options.php" id="ha-pf-settings-form">
+        <div class="ha-pf-admin-container ha-pf-preview-disabled">
+            <div class="ha-pf-settings-column">
+                <form method="post" action="options.php" id="ha-pf-settings-form">
             <?php settings_fields( 'ha_powerflow_group' ); ?>
 
             <div class="ha-pf-toggles-bar">
@@ -233,6 +252,12 @@ function ha_powerflow_settings_page() {
                     <span class="ha-pf-toggle-text"><?php echo esc_html( $label ); ?></span>
                 </label>
                 <?php endforeach; ?>
+                <div style="width:1px; height:24px; background:rgba(0,0,0,0.1); margin:0 8px;"></div>
+                <label class="ha-pf-toggle-label ha-pf-preview-toggle">
+                    <input type="checkbox" id="ha-pf-toggle-preview" />
+                    <span class="ha-pf-slider"></span>
+                    <span class="ha-pf-toggle-text">Live Preview</span>
+                </label>
             </div>
 
             <!-- ── Section 1: Connection & Sensors ────────────────────────── -->
@@ -338,6 +363,30 @@ function ha_powerflow_settings_page() {
                                 <td><input type="text" name="ha_powerflow_options[line_color]" value="<?php echo esc_attr( $o['line_color'] ?? '#4a90d9' ); ?>" class="ha-pf-color-picker" /></td>
                             </tr>
                             <tr>
+                                <th><label for="grid_color">Grid Line Color</label></th>
+                                <td><input type="text" name="ha_powerflow_options[grid_color]" value="<?php echo esc_attr( $o['grid_color'] ?? '' ); ?>" class="ha-pf-color-picker" /></td>
+                            </tr>
+                            <tr id="ha-pf-load-color-row">
+                                <th><label for="load_color">House Line Color</label></th>
+                                <td><input type="text" name="ha_powerflow_options[load_color]" value="<?php echo esc_attr( $o['load_color'] ?? '' ); ?>" class="ha-pf-color-picker" /></td>
+                            </tr>
+                            <tr id="ha-pf-pv-color-row">
+                                <th><label for="pv_color">Solar Line Color</label></th>
+                                <td><input type="text" name="ha_powerflow_options[pv_color]" value="<?php echo esc_attr( $o['pv_color'] ?? '' ); ?>" class="ha-pf-color-picker" /></td>
+                            </tr>
+                            <tr id="ha-pf-battery-color-row">
+                                <th><label for="battery_color">Battery Line Color</label></th>
+                                <td><input type="text" name="ha_powerflow_options[battery_color]" value="<?php echo esc_attr( $o['battery_color'] ?? '' ); ?>" class="ha-pf-color-picker" /></td>
+                            </tr>
+                            <tr id="ha-pf-ev-color-row">
+                                <th><label for="ev_color">EV Line Color</label></th>
+                                <td><input type="text" name="ha_powerflow_options[ev_color]" value="<?php echo esc_attr( $o['ev_color'] ?? '' ); ?>" class="ha-pf-color-picker" /></td>
+                            </tr>
+                            <tr id="ha-pf-heatpump-color-row">
+                                <th><label for="heatpump_color">Heat Pump Line Color</label></th>
+                                <td><input type="text" name="ha_powerflow_options[heatpump_color]" value="<?php echo esc_attr( $o['heatpump_color'] ?? '' ); ?>" class="ha-pf-color-picker" /></td>
+                            </tr>
+                            <tr>
                                 <th><label for="line_opacity">Line Opacity</label></th>
                                 <td>
                                     <input type="range" name="ha_powerflow_options[line_opacity]" min="0" max="1" step="0.05" value="<?php echo esc_attr( $o['line_opacity'] ?? 1.0 ); ?>" oninput="this.nextElementSibling.textContent=this.value"/>
@@ -351,7 +400,7 @@ function ha_powerflow_settings_page() {
                         <h2>📐 Common Paths</h2>
                         <table class="form-table form-table-sm" role="presentation">
                             <tr><th>Grid Line</th><td><input type="text" name="ha_powerflow_options[grid_line]" value="<?php echo esc_attr( $o['grid_line'] ?? '' ); ?>" class="widefat" /></td></tr>
-                            <tr><th>House Line</th><td><input type="text" name="ha_powerflow_options[load_line]" value="<?php echo esc_attr( $o['load_line'] ?? '' ); ?>" class="widefat" /></td></tr>
+                            <tr id="ha-pf-load-line-row"><th>House Line</th><td><input type="text" name="ha_powerflow_options[load_line]" value="<?php echo esc_attr( $o['load_line'] ?? '' ); ?>" class="widefat" /></td></tr>
                         </table>
                     </div>
                 </div>
@@ -384,9 +433,9 @@ function ha_powerflow_settings_page() {
                         <table class="form-table form-table-sm">
                             <?php ha_pf_entity( $o, 'pv_power', 'PV Power', 'sensor.pv_power' ); ?>
                             <?php ha_pf_entity( $o, 'pv_energy', 'PV Today', 'sensor.pv_energy' ); ?>
-                            <tr><th>Line Color</th><td><input type="text" name="ha_powerflow_options[pv_color]" value="<?php echo esc_attr( $o['pv_color'] ?? '' ); ?>" class="ha-pf-color-picker" /></td></tr>
-                            <tr><th>PV Line Path</th><td><input type="text" name="ha_powerflow_options[pv_line]" value="<?php echo esc_attr( $o['pv_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td></tr>
-                            <tr><th>Position</th><td><?php ha_pf_xy( $o, 'pv_label_x', 'pv_label_y', 500, 150 ); ?></td></tr>
+
+                            <tr id="ha-pf-pv-line-row"><th>PV Line Path</th><td><input type="text" name="ha_powerflow_options[pv_line]" value="<?php echo esc_attr( $o['pv_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td></tr>
+                            <tr id="ha-pf-pv-label-row"><th>Position</th><td><?php ha_pf_xy( $o, 'pv_label_x', 'pv_label_y', 500, 150 ); ?></td></tr>
                         </table>
                     </div>
                     <div id="ha-pf-section-ev" class="ha-pf-card ha-pf-module-card" data-module="ev">
@@ -394,8 +443,9 @@ function ha_powerflow_settings_page() {
                         <table class="form-table form-table-sm">
                             <?php ha_pf_entity( $o, 'ev_power', 'EV Power', 'sensor.ev_power' ); ?>
                             <?php ha_pf_entity( $o, 'ev_soc',   'EV SOC',   'sensor.ev_soc' ); ?>
-                            <tr><th>EV Line Path</th><td><input type="text" name="ha_powerflow_options[ev_line]" value="<?php echo esc_attr( $o['ev_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td></tr>
-                            <tr><th>Position</th><td><?php ha_pf_xy( $o, 'ev_label_x', 'ev_label_y', 750, 550 ); ?></td></tr>
+
+                            <tr id="ha-pf-ev-line-row"><th>EV Line Path</th><td><input type="text" name="ha_powerflow_options[ev_line]" value="<?php echo esc_attr( $o['ev_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td></tr>
+                            <tr id="ha-pf-ev-label-row"><th>Position</th><td><?php ha_pf_xy( $o, 'ev_label_x', 'ev_label_y', 750, 550 ); ?></td></tr>
                         </table>
                     </div>
                 </div>
@@ -407,8 +457,9 @@ function ha_powerflow_settings_page() {
                             <?php ha_pf_entity( $o, 'battery_in_energy', 'Energy In', 'sensor.battery_energy_in' ); ?>
                             <?php ha_pf_entity( $o, 'battery_out_energy', 'Energy Out', 'sensor.battery_energy_out' ); ?>
                             <?php ha_pf_entity( $o, 'battery_soc', 'SOC', 'sensor.battery_soc' ); ?>
-                            <tr><th>Battery Line Path</th><td><input type="text" name="ha_powerflow_options[battery_line]" value="<?php echo esc_attr( $o['battery_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td></tr>
-                            <tr><th>Position</th><td><?php ha_pf_xy( $o, 'battery_label_x', 'battery_label_y', 500, 550 ); ?></td></tr>
+
+                            <tr id="ha-pf-battery-line-row"><th>Battery Line Path</th><td><input type="text" name="ha_powerflow_options[battery_line]" value="<?php echo esc_attr( $o['battery_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td></tr>
+                            <tr id="ha-pf-battery-label-row"><th>Position</th><td><?php ha_pf_xy( $o, 'battery_label_x', 'battery_label_y', 500, 550 ); ?></td></tr>
                         </table>
                     </div>
                     <div id="ha-pf-section-heatpump" class="ha-pf-card ha-pf-module-card" data-module="heatpump">
@@ -417,8 +468,9 @@ function ha_powerflow_settings_page() {
                             <?php ha_pf_entity( $o, 'heatpump_power', 'Power', 'sensor.heat_pump_power' ); ?>
                             <?php ha_pf_entity( $o, 'heatpump_energy', 'Energy Today', 'sensor.heat_pump_energy' ); ?>
                             <?php ha_pf_entity( $o, 'heatpump_efficiency', 'Efficiency (COP)', 'sensor.heat_pump_cop' ); ?>
-                            <tr><th>HP Line Path</th><td><input type="text" name="ha_powerflow_options[heatpump_line]" value="<?php echo esc_attr( $o['heatpump_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td></tr>
-                            <tr><th>Position</th><td><?php ha_pf_xy( $o, 'heatpump_label_x', 'heatpump_label_y', 250, 550 ); ?></td></tr>
+
+                            <tr id="ha-pf-heatpump-line-row"><th>HP Line Path</th><td><input type="text" name="ha_powerflow_options[heatpump_line]" value="<?php echo esc_attr( $o['heatpump_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td></tr>
+                            <tr id="ha-pf-heatpump-label-row"><th>Position</th><td><?php ha_pf_xy( $o, 'heatpump_label_x', 'heatpump_label_y', 250, 550 ); ?></td></tr>
                         </table>
                     </div>
                     <div id="ha-pf-section-weather" class="ha-pf-card ha-pf-module-card" data-module="weather">
@@ -540,7 +592,24 @@ function ha_powerflow_settings_page() {
                     <?php submit_button( 'Save Settings', 'primary', 'submit', false ); ?>
                 </div>
             </div>
-        </form>
+                </form>
+            </div><!-- .ha-pf-settings-column -->
+
+            <div class="ha-pf-preview-column">
+                <div class="ha-pf-preview-sticky">
+                    <div class="ha-pf-card">
+                        <h2>👁️ Live Preview</h2>
+                        <div id="ha-pf-admin-preview-container">
+                            <?php echo HA_Powerflow_Shortcode::render(); ?>
+                        </div>
+                        <p class="description" style="margin-top:15px; text-align:center;">
+                            Changes shown here are <strong>instant</strong>. <br/>
+                            Remember to <strong>Save Settings</strong> to apply to the frontend.
+                        </p>
+                    </div>
+                </div>
+            </div><!-- .ha-pf-preview-column -->
+        </div><!-- .ha-pf-admin-container -->
 
         <hr>
         <h2>Quick Start</h2>

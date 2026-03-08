@@ -14,6 +14,7 @@
     --hapf-shadow-hover: 0 20px 35px -5px rgba(0, 0, 0, 0.1), 0 10px 15px -5px rgba(0, 0, 0, 0.06);
     --hapf-radius: 16px;
     --hapf-transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    --hapf-preview-width: 380px;
 }
 
 .ha-pf-wrap {
@@ -66,6 +67,67 @@
     position: sticky;
     top: 32px;
     z-index: 10;
+}
+
+/* ── Live Preview Layout ── */
+.ha-pf-admin-container {
+    display: flex;
+    gap: 30px;
+    align-items: flex-start;
+    margin-top: 20px;
+}
+
+.ha-pf-settings-column {
+    flex: 1;
+    min-width: 0;
+}
+
+.ha-pf-preview-column {
+    flex: 0 0 var(--hapf-preview-width);
+    position: sticky;
+    top: 100px;
+    z-index: 10;
+}
+
+.ha-pf-preview-sticky {
+    width: var(--hapf-preview-width);
+}
+
+#ha-pf-admin-preview-container .ha-powerflow-widget {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 1000 / 700;
+    transform: scale(1);
+    transform-origin: top center;
+    margin: 0;
+}
+
+#ha-pf-admin-preview-container .ha-pf-debug-bar {
+    display: none !important;
+}
+
+/* Layout control for Toggle Preview */
+.ha-pf-admin-container.ha-pf-preview-disabled .ha-pf-preview-column {
+    display: none !important;
+}
+
+.ha-pf-admin-container.ha-pf-preview-disabled .ha-pf-settings-column {
+    flex: 1 1 100%;
+}
+
+/* Force settings columns to stack ONLY when in sidebar layout to reclaim space */
+.ha-pf-admin-container:not(.ha-pf-preview-disabled) .ha-pf-settings-column .ha-pf-columns {
+    flex-direction: column;
+}
+
+.ha-pf-admin-container:not(.ha-pf-preview-disabled) .ha-pf-settings-column .ha-pf-col-left,
+.ha-pf-admin-container:not(.ha-pf-preview-disabled) .ha-pf-settings-column .ha-pf-col-right {
+    flex: 1 1 auto;
+    width: 100%;
+}
+
+.ha-pf-preview-column .ha-pf-card {
+    padding: 20px;
 }
 
 .ha-pf-col-full { flex: 1 1 100%; }

@@ -7,10 +7,16 @@
     var $widget = $('.ha-powerflow-widget');
     if (!$widget.length) return;
 
+    var isPreview     = $widget.closest('#ha-pf-admin-preview-container').length > 0;
     var debugMode     = $widget.attr('data-debug') === 'true';
     var anyModule     = haPowerflow.anyModule === 'true';
     var lineOpacity   = parseFloat(haPowerflow.lineOpacity);
     if (isNaN(lineOpacity)) lineOpacity = 1.0;
+
+    if (isPreview) {
+        $status.html('✓ Preview Ready (Real-time Config Active)');
+        return;
+    }
 
     var globalColor   = haPowerflow.lineColor    || '#4a90d9';
     var gridColor     = haPowerflow.gridColor    || globalColor;
@@ -339,6 +345,8 @@
             } else {
                 svgText('ha-pf-flow-sub', '');
             }
+
+            $widget[0].style.setProperty('--ha-pf-grid-color', gridColor);
         } else {
             var newGridPath = (gridPower > 0) ? forwardPath : reversePath(forwardPath);
             var oldGridPath = laserEl.getAttribute('d');
@@ -354,7 +362,9 @@
                 
                 // Smart Palette / Intensity Check for Grid
                 var activeGridColor = gridColor;
-                if (haPowerflow.isCustomGrid !== 'true') activeGridColor = '#3498db'; // Default Importing Blue
+                if (haPowerflow.isCustomGrid !== 'true') activeGridColor = '#1976d2'; // Default Importing Blue (Darker)
+                
+                $widget[0].style.setProperty('--ha-pf-grid-color', activeGridColor);
 
                 // Calculate primary consumer
                 var consumers = [
@@ -385,6 +395,8 @@
                 var activeGridColor = gridColor;
                 if (haPowerflow.isCustomGrid !== 'true') activeGridColor = '#2ecc71'; // Default Exporting Green
                 
+                $widget[0].style.setProperty('--ha-pf-grid-color', activeGridColor);
+                
                 animateLaser(laserEl, gridDur, gridPathChanged, false, activeGridColor, gridPulses, absGrid);
             }
         }
@@ -401,8 +413,10 @@
             if (haPowerflow.isCustomHouse !== 'true') activeHouseColor = '#ffffff'; // Default House White
 
             if (loadDur) {
+                $widget[0].style.setProperty('--ha-pf-load-color', activeHouseColor);
                 animateLaser(loadLaserEl, loadDur, false, false, activeHouseColor, loadPulses, absLoad);
             } else {
+                $widget[0].style.setProperty('--ha-pf-load-color', loadColor);
                 stopLaser(loadLaserEl);
             }
         }
@@ -418,8 +432,10 @@
             if (haPowerflow.isCustomPv !== 'true') activePvColor = '#f1c40f'; // Default Solar Gold
 
             if (pvDur) {
+                $widget[0].style.setProperty('--ha-pf-pv-color', activePvColor);
                 animateLaser(pvLaserEl, pvDur, false, false, activePvColor, pvPulses, absPv);
             } else {
+                $widget[0].style.setProperty('--ha-pf-pv-color', pvColor);
                 stopLaser(pvLaserEl);
             }
         }
@@ -433,11 +449,12 @@
             // Smart Palette for Battery
             var activeBatColor = batteryColor;
             if (haPowerflow.isCustomBattery !== 'true') {
-                if (batteryPower < 0) activeBatColor = '#2ecc71'; // Charging Green
+                if (batteryPower > 0) activeBatColor = '#2ecc71'; // Charging Green
                 else activeBatColor = '#e67e22'; // Discharging Orange
             }
 
             if (batDur) {
+                $widget[0].style.setProperty('--ha-pf-battery-color', activeBatColor);
                 var batPath = (batteryPower > 0)
                     ? batteryPath
                     : reversePath(batteryPath);
@@ -450,6 +467,7 @@
                 }
                 animateLaser(batteryLaserEl, batDur, batPathChanged, false, activeBatColor, batPulses, absBat);
             } else {
+                $widget[0].style.setProperty('--ha-pf-battery-color', batteryColor);
                 stopLaser(batteryLaserEl);
             }
         }
@@ -465,8 +483,10 @@
             if (haPowerflow.isCustomEv !== 'true') activeEvColor = '#349bef'; // Default EV Sky Blue
 
             if (evDur) {
+                $widget[0].style.setProperty('--ha-pf-ev-color', activeEvColor);
                 animateLaser(evLaserEl, evDur, false, false, activeEvColor, evPulses, absEv);
             } else {
+                $widget[0].style.setProperty('--ha-pf-ev-color', evColor);
                 stopLaser(evLaserEl);
             }
         }
@@ -482,8 +502,10 @@
             if (haPowerflow.isCustomHp !== 'true') activeHpColor = '#9b59b6'; // Default Heat Pump Purple
 
             if (hpDur) {
+                $widget[0].style.setProperty('--ha-pf-heatpump-color', activeHpColor);
                 animateLaser(heatpumpLaserEl, hpDur, false, false, activeHpColor, hpPulses, absHp);
             } else {
+                $widget[0].style.setProperty('--ha-pf-heatpump-color', heatpumpColor);
                 stopLaser(heatpumpLaserEl);
             }
         }
@@ -503,146 +525,154 @@
         }
 
         $.ajax({
-            url: haPowerflow.ajaxUrl,
-            method: 'POST',
-            data: { action: 'ha_powerflow_get_data', nonce: haPowerflow.nonce },
-            success: function (res) {
-                if (res.success) {
-                    var d = res.data;
+            url: haPowerflow.restUrl,
+            method: 'GET',
+            success: function (d) {
+                // Return data is directly the entity object now, not wrapped in `data.data`
+                // Ensure we handle case where WordPress might return WP_Error which technically could be 200 depending on server configuration (though we sent 400/500).
+                if (d.code && d.message) {
+                    $status.addClass('ha-pf-error').text('⚠ ' + d.message);
+                    return;
+                }
 
-                    // Warn if individual entities are missing
-                    var missing = [];
-                    if (!haPowerflow.gridPower) missing.push('Grid Power Entity');
-                    if (!haPowerflow.loadPower) missing.push('Load Power Entity');
-                    if (!haPowerflow.gridEnergy) missing.push('Grid Energy Entity');
-                    if (!haPowerflow.loadEnergy) missing.push('Load Energy Entity');
-                    if (enableSolar && !haPowerflow.pvPower) missing.push('PV Power Entity');
-                    if (enableSolar && !haPowerflow.pvEnergy) missing.push('PV Energy Entity');
-                    if (enableBattery && !haPowerflow.batteryPower) missing.push('Battery Power Entity');
-                    if (enableBattery && !haPowerflow.batteryInEnergy) missing.push('Battery Energy In Entity');
-                    if (enableBattery && !haPowerflow.batteryOutEnergy) missing.push('Battery Energy Out Entity');
-                    if (enableBattery && !haPowerflow.batterySoc) missing.push('Battery SOC Entity');
-                    if (enableEv && !haPowerflow.evPower) missing.push('EV Power Entity');
-                    if (enableEv && !haPowerflow.evSoc) missing.push('EV SOC Entity');
-                    if (enableHeatpump && !haPowerflow.heatpumpPower) missing.push('Heat Pump Power Entity');
-                    if (enableHeatpump && !haPowerflow.heatpumpEnergy) missing.push('Heat Pump Energy Entity');
-                    if (enableHeatpump && !haPowerflow.heatpumpEfficiency) missing.push('Heat Pump Efficiency Entity');
+                // Robustness Check: Ensure HA returned a valid mapped object with required sensors
+                if (typeof d !== 'object' || d === null || !d.grid_power || !d.load_power) {
+                    $status.addClass('ha-pf-error').text('⚠ Unexpected response from Home Assistant. Ensure your configuration is correct.');
+                    return;
+                }
 
-                    svgText('ha-pf-grid-power', fmt(d.grid_power.state, d.grid_power.unit));
-                    
-                    // Grid Energy Import
-                    svgText('ha-pf-grid-energy', 'In: ' + fmt(d.grid_energy.state, d.grid_energy.unit));
+                // Warn if individual entities are missing
+                var missing = [];
+                if (!haPowerflow.gridPower) missing.push('Grid Power Entity');
+                if (!haPowerflow.loadPower) missing.push('Load Power Entity');
+                if (!haPowerflow.gridEnergy) missing.push('Grid Energy Entity');
+                if (!haPowerflow.loadEnergy) missing.push('Load Energy Entity');
+                if (enableSolar && !haPowerflow.pvPower) missing.push('PV Power Entity');
+                if (enableSolar && !haPowerflow.pvEnergy) missing.push('PV Energy Entity');
+                if (enableBattery && !haPowerflow.batteryPower) missing.push('Battery Power Entity');
+                if (enableBattery && !haPowerflow.batteryInEnergy) missing.push('Battery Energy In Entity');
+                if (enableBattery && !haPowerflow.batteryOutEnergy) missing.push('Battery Energy Out Entity');
+                if (enableBattery && !haPowerflow.batterySoc) missing.push('Battery SOC Entity');
+                if (enableEv && !haPowerflow.evPower) missing.push('EV Power Entity');
+                if (enableEv && !haPowerflow.evSoc) missing.push('EV SOC Entity');
+                if (enableHeatpump && !haPowerflow.heatpumpPower) missing.push('Heat Pump Power Entity');
+                if (enableHeatpump && !haPowerflow.heatpumpEnergy) missing.push('Heat Pump Energy Entity');
+                if (enableHeatpump && !haPowerflow.heatpumpEfficiency) missing.push('Heat Pump Efficiency Entity');
 
-                    // Grid Energy Export (out) - Conditional Visibility
-                    var showExport = (enableSolar || enableBattery || enableEv);
-                    var $gridEnergyOut = $('#ha-pf-grid-energy-out');
-                    if (showExport) {
-                        $gridEnergyOut.show();
-                        svgText('ha-pf-grid-energy-out', 'Out: ' + fmt(d.grid_energy_out.state, d.grid_energy_out.unit));
-                    } else {
-                        $gridEnergyOut.hide();
-                    }
+                svgText('ha-pf-grid-power', fmt(d.grid_power.state, d.grid_power.unit));
+                
+                // Grid Energy Import
+                svgText('ha-pf-grid-energy', 'In: ' + fmt(d.grid_energy.state, d.grid_energy.unit));
 
-                    // Grid Prices
-                    svgText('ha-pf-grid-price-in', 'In Price: £' + (parseFloat(d.grid_price_in.state) || 0).toFixed(2));
-                    
-                    var $gridPriceOut = $('#ha-pf-grid-price-out');
-                    if (showExport) {
-                        $gridPriceOut.show();
-                        svgText('ha-pf-grid-price-out', 'Out Price: £' + (parseFloat(d.grid_price_out.state) || 0).toFixed(2));
-                    } else {
-                        $gridPriceOut.hide();
-                    }
-                    svgText('ha-pf-load-power', fmt(d.load_power.state, d.load_power.unit));
-                    svgText('ha-pf-load-energy', fmt(d.load_energy.state, d.load_energy.unit));
-
-                    if (enableSolar && d.pv_power && d.pv_energy) {
-                        svgText('ha-pf-pv-power', fmt(d.pv_power.state, d.pv_power.unit));
-                        svgText('ha-pf-pv-energy', fmt(d.pv_energy.state, d.pv_energy.unit));
-                    }
-
-                    var batPowerVal = NaN;
-                    if (enableBattery && d.battery_power) {
-                        batPowerVal = parseFloat(d.battery_power.state);
-                        svgText('ha-pf-battery-power', fmt(d.battery_power.state, d.battery_power.unit));
-                    }
-                    if (enableBattery && d.battery_soc) {
-                        var socVal = parseFloat(d.battery_soc.state);
-                        svgText('ha-pf-battery-soc', isNaN(socVal) ? 'N/A' : socVal.toFixed(0) + '\u202f%');
-                    }
-
-                    var evPowerVal = NaN;
-                    if (enableEv && d.ev_power) {
-                        evPowerVal = parseFloat(d.ev_power.state);
-                        svgText('ha-pf-ev-power', fmt(d.ev_power.state, d.ev_power.unit));
-                    }
-                    if (enableEv && d.ev_soc) {
-                        var evSocVal = parseFloat(d.ev_soc.state);
-                        svgText('ha-pf-ev-soc', isNaN(evSocVal) ? 'N/A' : evSocVal.toFixed(0) + '\u202f%');
-                    }
-
-                    var hpPowerVal = NaN;
-                    if (enableHeatpump && d.heatpump_power) {
-                        hpPowerVal = parseFloat(d.heatpump_power.state);
-                        svgText('ha-pf-heatpump-power', fmt(d.heatpump_power.state, d.heatpump_power.unit));
-                    }
-                    if (enableHeatpump && d.heatpump_efficiency) {
-                        var copVal = parseFloat(d.heatpump_efficiency.state);
-                        svgText('ha-pf-heatpump-efficiency', isNaN(copVal) ? 'N/A' : 'COP\u202f' + copVal.toFixed(1));
-                    }
-
-                    var pvPowerVal = NaN;
-                    if (enableSolar && d.pv_power) {
-                        pvPowerVal = parseFloat(d.pv_power.state);
-                    }
-
-                    if (haPowerflow.enableWeather === 'true' && d.weather) {
-                        svgText('ha-pf-weather', formatWeather(d.weather.state));
-                        setWeatherIcon(d.weather.state);
-                    }
-
-                    setFlow({
-                        grid: parseFloat(d.grid_power.state),
-                        load: parseFloat(d.load_power.state),
-                        pv: pvPowerVal,
-                        battery: batPowerVal,
-                        ev: evPowerVal,
-                        heatpump: hpPowerVal,
-                    });
-
-                    // Update custom entities
-                    if (haPowerflow.customEntities && haPowerflow.customEntities.length) {
-                        haPowerflow.customEntities.forEach(function(item, index) {
-                            var entry = d['custom_' + index];
-                            if (entry) {
-                                var val = fmt(entry.state, entry.unit);
-                                var $group = $('#ha-pf-custom-' + index);
-                                $group.find('.ha-pf-custom-value').text(val);
-                            }
-                        });
-                    }
-
-                    if (missing.length) {
-                        $status.addClass('ha-pf-error').text('⚠ Missing entity IDs: ' + missing.join(', ') + ' — check Settings.');
-                    } else if (
-                        d.grid_power.state === 'unavailable' ||
-                        d.grid_power.state === 'unknown' ||
-                        d.grid_power.state === 'N/A'
-                    ) {
-                        $status.addClass('ha-pf-error').text('⚠ Grid Power sensor returned "' + d.grid_power.state + '" — check entity ID in Settings.');
-                    } else {
-                        $status.removeClass('ha-pf-error').text('Updated ' + new Date().toLocaleTimeString());
-                    }
+                // Grid Energy Export (out) - Conditional Visibility
+                var showExport = (enableSolar || enableBattery || enableEv);
+                var $gridEnergyOut = $('#ha-pf-grid-energy-out');
+                if (showExport) {
+                    $gridEnergyOut.show();
+                    svgText('ha-pf-grid-energy-out', 'Out: ' + fmt(d.grid_energy_out.state, d.grid_energy_out.unit));
                 } else {
-                    $status.addClass('ha-pf-error').text('⚠ ' + res.data);
+                    $gridEnergyOut.hide();
+                }
+
+                // Grid Prices
+                svgText('ha-pf-grid-price-in', 'In Price: £' + (parseFloat(d.grid_price_in.state) || 0).toFixed(2));
+                
+                var $gridPriceOut = $('#ha-pf-grid-price-out');
+                if (showExport) {
+                    $gridPriceOut.show();
+                    svgText('ha-pf-grid-price-out', 'Out Price: £' + (parseFloat(d.grid_price_out.state) || 0).toFixed(2));
+                } else {
+                    $gridPriceOut.hide();
+                }
+                svgText('ha-pf-load-power', fmt(d.load_power.state, d.load_power.unit));
+                svgText('ha-pf-load-energy', fmt(d.load_energy.state, d.load_energy.unit));
+
+                if (enableSolar && d.pv_power && d.pv_energy) {
+                    svgText('ha-pf-pv-power', fmt(d.pv_power.state, d.pv_power.unit));
+                    svgText('ha-pf-pv-energy', fmt(d.pv_energy.state, d.pv_energy.unit));
+                }
+
+                var batPowerVal = NaN;
+                if (enableBattery && d.battery_power) {
+                    batPowerVal = parseFloat(d.battery_power.state);
+                    svgText('ha-pf-battery-power', fmt(d.battery_power.state, d.battery_power.unit));
+                }
+                if (enableBattery && d.battery_soc) {
+                    var socVal = parseFloat(d.battery_soc.state);
+                    svgText('ha-pf-battery-soc', isNaN(socVal) ? 'N/A' : socVal.toFixed(0) + '\u202f%');
+                }
+
+                var evPowerVal = NaN;
+                if (enableEv && d.ev_power) {
+                    evPowerVal = parseFloat(d.ev_power.state);
+                    svgText('ha-pf-ev-power', fmt(d.ev_power.state, d.ev_power.unit));
+                }
+                if (enableEv && d.ev_soc) {
+                    var evSocVal = parseFloat(d.ev_soc.state);
+                    svgText('ha-pf-ev-soc', isNaN(evSocVal) ? 'N/A' : evSocVal.toFixed(0) + '\u202f%');
+                }
+
+                var hpPowerVal = NaN;
+                if (enableHeatpump && d.heatpump_power) {
+                    hpPowerVal = parseFloat(d.heatpump_power.state);
+                    svgText('ha-pf-heatpump-power', fmt(d.heatpump_power.state, d.heatpump_power.unit));
+                }
+                if (enableHeatpump && d.heatpump_efficiency) {
+                    var copVal = parseFloat(d.heatpump_efficiency.state);
+                    svgText('ha-pf-heatpump-efficiency', isNaN(copVal) ? 'N/A' : 'COP\u202f' + copVal.toFixed(1));
+                }
+
+                var pvPowerVal = NaN;
+                if (enableSolar && d.pv_power) {
+                    pvPowerVal = parseFloat(d.pv_power.state);
+                }
+
+                if (haPowerflow.enableWeather === 'true' && d.weather) {
+                    svgText('ha-pf-weather', formatWeather(d.weather.state));
+                    setWeatherIcon(d.weather.state);
+                }
+
+                setFlow({
+                    grid: parseFloat(d.grid_power.state),
+                    load: parseFloat(d.load_power.state),
+                    pv: pvPowerVal,
+                    battery: batPowerVal,
+                    ev: evPowerVal,
+                    heatpump: hpPowerVal,
+                });
+
+                // Update custom entities
+                if (haPowerflow.customEntities && haPowerflow.customEntities.length) {
+                    haPowerflow.customEntities.forEach(function(item, index) {
+                        var entry = d['custom_' + index];
+                        if (entry) {
+                            var val = fmt(entry.state, entry.unit);
+                            var $group = $('#ha-pf-custom-' + index);
+                            $group.find('.ha-pf-custom-value').text(val);
+                        }
+                    });
+                }
+
+                if (missing.length) {
+                    $status.addClass('ha-pf-error').text('⚠ Missing entity IDs: ' + missing.join(', ') + ' — check Settings.');
+                } else if (
+                    d.grid_power.state === 'unavailable' ||
+                    d.grid_power.state === 'unknown' ||
+                    d.grid_power.state === 'N/A'
+                ) {
+                    $status.addClass('ha-pf-error').text('⚠ Grid Power sensor returned "' + d.grid_power.state + '" — check entity ID in Settings.');
+                } else {
+                    $status.removeClass('ha-pf-error').text('Updated ' + new Date().toLocaleTimeString());
                 }
             },
             error: function (xhr) {
-                var msg = '⚠ WordPress AJAX error';
-                if (xhr.status === 0) {
+                var msg = '⚠ API error';
+                
+                // For a 400 or 500 thrown by WordPress REST API (like WP_Error), grab the JSON error message
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    msg += ' — ' + xhr.responseJSON.message;
+                } else if (xhr.status === 0) {
                     msg += ' — could not reach the server. Check your internet connection.';
-                } else if (xhr.status === 403) {
-                    msg += ' — forbidden (nonce expired?). Try refreshing the page.';
                 } else {
                     msg += ' (HTTP ' + xhr.status + '). Check browser console for details.';
                 }

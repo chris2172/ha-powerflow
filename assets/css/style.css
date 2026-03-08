@@ -24,6 +24,37 @@
     pointer-events: none;
 }
 
+/* Labels - respect the user-defined Text Colors */
+.ha-powerflow-widget text[id$="-title"], 
+.ha-powerflow-widget #ha-pf-home-label,
+.ha-powerflow-widget #ha-pf-flow-label,
+.ha-powerflow-widget #ha-pf-weather,
+.ha-powerflow-widget .ha-pf-custom-entity text:first-child { 
+    fill: var(--ha-pf-title-color, #8899bb); 
+}
+
+.ha-powerflow-widget text[id$="-power"],
+.ha-powerflow-widget text.ha-pf-custom-value { 
+    fill: var(--ha-pf-power-color, #f0a500); 
+}
+
+.ha-powerflow-widget text[id$="-energy"],
+.ha-powerflow-widget text[id$="-energy-out"],
+.ha-powerflow-widget text[id$="-soc"],
+.ha-powerflow-widget text[id$="-efficiency"],
+.ha-powerflow-widget text[id*="-price-"] { 
+    fill: var(--ha-pf-energy-color, #6677aa); 
+}
+
+/* Lines - remain dynamic and controlled via JS/CSS variables */
+.ha-powerflow-widget #ha-pf-line, .ha-powerflow-widget #ha-pf-path { stroke: var(--ha-pf-grid-color); }
+.ha-powerflow-widget #ha-pf-load-line, .ha-powerflow-widget #ha-pf-load-path { stroke: var(--ha-pf-load-color); }
+.ha-powerflow-widget #ha-pf-pv-line, .ha-powerflow-widget #ha-pf-pv-path { stroke: var(--ha-pf-pv-color); }
+.ha-powerflow-widget #ha-pf-battery-line, .ha-powerflow-widget #ha-pf-battery-path { stroke: var(--ha-pf-battery-color); }
+.ha-powerflow-widget #ha-pf-ev-line, .ha-powerflow-widget #ha-pf-ev-path { stroke: var(--ha-pf-ev-color); }
+.ha-powerflow-widget #ha-pf-heatpump-line, .ha-powerflow-widget #ha-pf-heatpump-path { stroke: var(--ha-pf-heatpump-color); }
+.ha-powerflow-widget #ha-pf-weather-icon { stroke: var(--ha-pf-title-color); }
+
 .ha-powerflow-widget .ha-pf-laser {
     filter: drop-shadow(0 0 3px currentColor);
     transition: stroke-width 0.5s, filter 0.5s;

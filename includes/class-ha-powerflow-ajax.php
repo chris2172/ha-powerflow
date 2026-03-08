@@ -4,15 +4,24 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class HA_Powerflow_Ajax {
 
     public static function init() {
+        // Keeps admin-related test connection/snapshots on admin-ajax
         add_action( 'wp_ajax_ha_pf_test_connection', [ __CLASS__, 'test_connection' ] );
-        add_action( 'wp_ajax_ha_powerflow_get_data', [ __CLASS__, 'get_data' ] );
-        add_action( 'wp_ajax_nopriv_ha_powerflow_get_data', [ __CLASS__, 'get_data' ] );
-        
         add_action( 'wp_ajax_ha_powerflow_restore_snapshot',  [ __CLASS__, 'restore_snapshot' ] );
         add_action( 'wp_ajax_ha_powerflow_create_snapshot',   [ __CLASS__, 'manual_snapshot' ] );
         add_action( 'wp_ajax_ha_powerflow_download_snapshot', [ __CLASS__, 'download_snapshot' ] );
         add_action( 'wp_ajax_ha_powerflow_upload_snapshot',   [ __CLASS__, 'upload_snapshot' ] );
         add_action( 'wp_ajax_ha_powerflow_discover_entities', [ __CLASS__, 'discover_entities' ] );
+
+        // Register the new REST API route for the frontend polling
+        add_action( 'rest_api_init', [ __CLASS__, 'register_rest_routes' ] );
+    }
+
+    public static function register_rest_routes() {
+        register_rest_route( 'ha-powerflow/v1', '/data', [
+            'methods'             => 'GET',
+            'callback'            => [ __CLASS__, 'get_rest_data' ],
+            'permission_callback' => '__return_true', // Public endpoint
+        ]);
     }
 
     public static function test_connection() {
@@ -53,15 +62,24 @@ class HA_Powerflow_Ajax {
         }
     }
 
-    public static function get_data() {
-        check_ajax_referer( 'ha_powerflow_nonce', 'nonce' );
+    public static function get_rest_data( $request ) {
+        // Basic IP Rate Limiting (e.g. max 100 requests per minute per IP)
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        if ( $ip !== 'unknown' ) {
+            $rate_limit_key = 'ha_pf_rl_' . md5( $ip );
+            $requests = (int) get_transient( $rate_limit_key );
+            if ( $requests >= 100 ) {
+                return new WP_Error( 'rate_limited', 'Too many requests. Please try again later.', [ 'status' => 429 ] );
+            }
+            set_transient( $rate_limit_key, $requests + 1, MINUTE_IN_SECONDS );
+        }
 
         $o = get_option( 'ha_powerflow_options', [] );
         $ha_url   = isset( $o['ha_url'] )   ? rtrim( $o['ha_url'], '/' ) : '';
         $ha_token = isset( $o['ha_token'] ) ? $o['ha_token']             : '';
 
         if ( ! $ha_url || ! $ha_token ) {
-            wp_send_json_error( 'HA Powerflow is not configured. Please visit Settings → HA Powerflow.' );
+            return new WP_Error( 'not_configured', 'HA Powerflow is not configured. Please visit Settings → HA Powerflow.', [ 'status' => 400 ] );
         }
 
         $headers = [
@@ -127,15 +145,24 @@ class HA_Powerflow_Ajax {
                 implode( ',', $template_keys )
             );
 
+            $cache_key   = 'ha_pf_data_cache';
+            $cached_data = get_transient( $cache_key );
+            
+            // The previous AJAX method might have stored boolean 'true' or incorrectly formatted arrays.
+            // We ensure it is a valid associative array containing our expected keys before early return.
+            if ( false !== $cached_data && is_array( $cached_data ) && isset( $cached_data['grid_power'] ) ) {
+                return rest_ensure_response( $cached_data );
+            }
+
             $response = wp_remote_post( $ha_url . '/api/template', [
                 'headers'   => $headers,
                 'body'      => json_encode( [ 'template' => $template_content ] ),
-                'timeout'   => 10,
+                'timeout'   => 4,
                 'sslverify' => true,
             ] );
 
             if ( is_wp_error( $response ) ) {
-                wp_send_json_error( 'Could not reach Home Assistant: ' . $response->get_error_message() );
+                return new WP_Error( 'ha_error', 'Could not reach Home Assistant: ' . $response->get_error_message(), [ 'status' => 500 ] );
             }
 
             $body = json_decode( wp_remote_retrieve_body( $response ), true );
@@ -148,12 +175,13 @@ class HA_Powerflow_Ajax {
                         'unit'  => ( isset( $v['unit'] ) && $v['unit'] !== null ) ? $v['unit'] : '',
                     ];
                 }
+                set_transient( $cache_key, $data, 5 );
             } else {
-                wp_send_json_error( 'Invalid response from Home Assistant.' );
+                return new WP_Error( 'ha_invalid', 'Invalid response from Home Assistant.', [ 'status' => 500 ] );
             }
         }
 
-        wp_send_json_success( $data );
+        return rest_ensure_response( $data );
     }
 
     public static function discover_entities() {

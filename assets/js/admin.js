@@ -5,135 +5,78 @@ jQuery(document).ready(function ($) {
     $('.ha-pf-color-picker').wpColorPicker();
 
     function syncAllModules() {
+        var modules = Object.keys(haPowerflow.modules || {});
+        modules.push('weather');
+
         modules.forEach(function (key) {
             var $cb = $('#ha-pf-toggle-' + key);
             var $section = $('#ha-pf-section-' + key);
             $section.toggle($cb.is(':checked'));
+            
+            // Sync rows inside the sections if they are core modules
+            if (haPowerflow.modules && haPowerflow.modules[key]) {
+                var prefix = haPowerflow.modules[key].prefix;
+                var on = $cb.is(':checked');
+                $('#ha-pf-' + prefix + '-line-row').toggle(on);
+                $('#ha-pf-' + prefix + '-label-row').toggle(on);
+                $('#ha-pf-' + prefix + '-color-row').toggle(on);
+                $('.ha-pf-limit-row-' + key).toggle(on);
+            }
         });
+
         syncLoadLine();
-        syncPvRows();
-        syncBatteryRows();
-        syncEvRows();
-        syncHeatpumpRows();
         syncPlaceholder();
     }
 
-    // ── Module toggles → show/hide right-column sections ──────────────────
-    var modules = ['solar', 'battery', 'ev', 'heatpump', 'weather'];
-
     function anyModuleEnabled() {
-        var coreModules = ['solar', 'battery', 'ev', 'heatpump'];
+        var coreModules = Object.keys(haPowerflow.modules || {});
         return coreModules.some(function (k) {
             return $('#ha-pf-toggle-' + k).is(':checked');
         });
     }
 
     function syncLoadLine() {
-        if (anyModuleEnabled()) {
-            $('#ha-pf-load-line-row').show();
-            $('#ha-pf-load-color-row').show();
-        } else {
-            $('#ha-pf-load-line-row').hide();
-            $('#ha-pf-load-color-row').hide();
-        }
-    }
-
-    function syncPvRows() {
-        var solarOn = $('#ha-pf-toggle-solar').is(':checked');
-        if (solarOn) {
-            $('#ha-pf-pv-line-row').show();
-            $('#ha-pf-pv-label-row').show();
-            $('#ha-pf-pv-color-row').show();
-        } else {
-            $('#ha-pf-pv-line-row').hide();
-            $('#ha-pf-pv-label-row').hide();
-            $('#ha-pf-pv-color-row').hide();
-        }
-    }
-
-    function syncBatteryRows() {
-        var batteryOn = $('#ha-pf-toggle-battery').is(':checked');
-        if (batteryOn) {
-            $('#ha-pf-battery-line-row').show();
-            $('#ha-pf-battery-label-row').show();
-            $('#ha-pf-battery-color-row').show();
-        } else {
-            $('#ha-pf-battery-line-row').hide();
-            $('#ha-pf-battery-label-row').hide();
-            $('#ha-pf-battery-color-row').hide();
-        }
-    }
-
-    function syncEvRows() {
-        var evOn = $('#ha-pf-toggle-ev').is(':checked');
-        if (evOn) {
-            $('#ha-pf-ev-line-row').show();
-            $('#ha-pf-ev-label-row').show();
-            $('#ha-pf-ev-color-row').show();
-        } else {
-            $('#ha-pf-ev-line-row').hide();
-            $('#ha-pf-ev-label-row').hide();
-            $('#ha-pf-ev-color-row').hide();
-        }
-    }
-
-    function syncHeatpumpRows() {
-        var hpOn = $('#ha-pf-toggle-heatpump').is(':checked');
-        if (hpOn) {
-            $('#ha-pf-heatpump-line-row').show();
-            $('#ha-pf-heatpump-label-row').show();
-            $('#ha-pf-heatpump-color-row').show();
-        } else {
-            $('#ha-pf-heatpump-line-row').hide();
-            $('#ha-pf-heatpump-label-row').hide();
-            $('#ha-pf-heatpump-color-row').hide();
-        }
-    }
-
-    function syncModuleCards() {
-        var solarOn   = $('#ha-pf-toggle-solar').is(':checked');
-        var batteryOn = $('#ha-pf-toggle-battery').is(':checked');
-        var evOn      = $('#ha-pf-toggle-ev').is(':checked');
-        var hpOn      = $('#ha-pf-toggle-heatpump').is(':checked');
-        var weatherOn = $('#ha-pf-toggle-weather').is(':checked');
-
-        $('.ha-pf-module-card[data-module="solar"]').toggle(solarOn);
-        $('.ha-pf-module-card[data-module="battery"]').toggle(batteryOn);
-        $('.ha-pf-module-card[data-module="ev"]').toggle(evOn);
-        $('.ha-pf-module-card[data-module="heatpump"]').toggle(hpOn);
-        $('.ha-pf-module-card[data-module="weather"]').toggle(weatherOn);
+        var on = anyModuleEnabled();
+        $('#ha-pf-load-line-row').toggle(on);
+        $('#ha-pf-load-color-row').toggle(on);
     }
 
     function syncPlaceholder() {
-        var anyVisible = modules.some(function (k) {
-            return $('#ha-pf-section-' + k).is(':visible');
-        });
+        var anyVisible = $('.ha-pf-module-card:visible').length > 0;
         $('#ha-pf-no-modules').toggle(!anyVisible);
     }
 
-    modules.forEach(function (key) {
+    // Initialize toggles
+    var allKeys = Object.keys(haPowerflow.modules || {});
+    allKeys.push('weather');
+
+    allKeys.forEach(function (key) {
         var $cb      = $('#ha-pf-toggle-' + key);
         var $section = $('#ha-pf-section-' + key);
 
-        $section.toggle($cb.is(':checked'));
-
         $cb.on('change', function () {
-            $section.slideToggle(200);
-            setTimeout(syncPlaceholder, 250);
-            syncLoadLine();
-            if (key === 'solar')    syncPvRows();
-            if (key === 'battery')  syncBatteryRows();
-            if (key === 'ev')       syncEvRows();
-            if (key === 'heatpump') syncHeatpumpRows();
+            if ($cb.is(':checked')) {
+                $section.slideDown(200);
+            } else {
+                $section.slideUp(200);
+            }
+            setTimeout(function() {
+                syncLoadLine();
+                syncPlaceholder();
+                
+                if (haPowerflow.modules && haPowerflow.modules[key]) {
+                    var prefix = haPowerflow.modules[key].prefix;
+                    var on = $cb.is(':checked');
+                    $('#ha-pf-' + prefix + '-line-row').toggle(on);
+                    $('#ha-pf-' + prefix + '-label-row').toggle(on);
+                    $('#ha-pf-' + prefix + '-color-row').toggle(on);
+                    $('.ha-pf-limit-row-' + key).toggle(on);
+                }
+            }, 250);
         });
     });
 
-    syncLoadLine();
-    syncPvRows();
-    syncBatteryRows();
-    syncEvRows();
-    syncHeatpumpRows();
-    syncPlaceholder();
+    syncAllModules();
 
     // ── Test Connection ────────────────────────────────────────────────────
     var $testBtn    = $('#ha-pf-test-btn');
@@ -510,7 +453,6 @@ jQuery(document).ready(function ($) {
             // Gather all options from the form
             $('#ha-pf-settings-form').serializeArray().forEach(function(item) {
                 var name = item.name.replace('ha_powerflow_options[', '').replace(']', '');
-                // Handle nested custom entities if needed, but for now focus on top-level
                 options[name] = item.value;
             });
 
@@ -519,101 +461,128 @@ jQuery(document).ready(function ($) {
             $preview.css('background-image', 'url(' + bgUrl + ')');
             updateImageAnalysis(bgUrl);
 
-            // Sync Colors
-            $preview.css({
+            // Base Colors
+            var line_color = options['line_color'] || '#4a90d9';
+            var cssVars = {
                 '--ha-pf-title-color': options['title_color'] || '#8899bb',
                 '--ha-pf-power-color': options['power_color'] || '#f0a500',
                 '--ha-pf-energy-color': options['energy_color'] || '#6677aa',
-                '--ha-pf-grid-color': options['grid_color'] || options['line_color'] || '#4a90d9',
-                '--ha-pf-load-color': options['load_color'] || options['line_color'] || '#4a90d9',
-                '--ha-pf-pv-color': options['pv_color'] || options['line_color'] || '#4a90d9',
-                '--ha-pf-battery-color': options['battery_color'] || options['line_color'] || '#4a90d9',
-                '--ha-pf-ev-color': options['ev_color'] || options['line_color'] || '#4a90d9',
-                '--ha-pf-heatpump-color': options['heatpump_color'] || options['line_color'] || '#4a90d9'
-            });
+                '--ha-pf-grid-color': options['grid_color'] || line_color,
+                '--ha-pf-load-color': options['load_color'] || line_color
+            };
+
+            // Dynamic Module Colors & Visibility
+            var anyModule = false;
+            if (haPowerflow.modules) {
+                Object.keys(haPowerflow.modules).forEach(function(key) {
+                    var m = haPowerflow.modules[key];
+                    var prefix = m.prefix;
+                    var enabled = $('#ha-pf-toggle-' + key).is(':checked');
+                    if (enabled) anyModule = true;
+
+                    // Color
+                    cssVars['--ha-pf-' + prefix + '-color'] = options[prefix + '_color'] || line_color;
+
+                    // Visibility
+                    $preview.find('#ha-pf-' + prefix + '-line, #ha-pf-' + prefix + '-path, #ha-pf-' + prefix + '-group').toggle(enabled);
+                    
+                    // Positions
+                    var x = options[prefix + '_label_x'];
+                    var y = options[prefix + '_label_y'];
+                    if (x !== undefined && y !== undefined) {
+                        var $group = $preview.find('#ha-pf-' + prefix + '-group');
+                        $group.find('text').each(function() {
+                            var $el = $(this);
+                            $el.attr('x', x);
+                            $el.find('tspan').attr('x', x);
+
+                            var selector = $el.attr('id') || '';
+                            var baseOffset = 0;
+                            if (selector.includes('power')) baseOffset = 24;
+                            else if (selector.includes('soc') || selector.includes('energy') || selector.includes('efficiency')) baseOffset = 44;
+                            
+                            $el.attr('y', parseInt(y) + baseOffset);
+                        });
+                    }
+
+                    // Path data
+                    var d = options[prefix + '_line'];
+                    if (d) {
+                        $preview.find('#ha-pf-' + prefix + '-line').attr('d', d);
+                        $preview.find('#ha-pf-' + prefix + '-path').attr('d', d);
+                    }
+
+                    // Max Capacity
+                    var mc = options[prefix + '_max_capacity'];
+                    if (mc) {
+                        $preview.find('#ha-pf-' + prefix + '-path').attr('data-max-capacity', mc);
+                    }
+                });
+            }
+
+            // Weather
+            var weatherEnabled = $('#ha-pf-toggle-weather').is(':checked');
+            $preview.find('#ha-pf-weather, #ha-pf-weather-icon-group').toggle(weatherEnabled);
+            if (weatherEnabled) {
+                $preview.find('#ha-pf-weather').css('font-size', (options['weather_font_size'] || 13) + 'px');
+                var wx = options['weather_x'];
+                var wy = options['weather_y'];
+                if (wx !== undefined && wy !== undefined) {
+                    $preview.find('#ha-pf-weather').attr('x', wx).attr('y', dy = parseInt(wy) + 5);
+                    $preview.find('#ha-pf-weather-icon-group').attr('transform', `translate(${wx}, ${parseInt(wy) - 30})`);
+                }
+            }
+
+            $preview.css(cssVars);
 
             // Sync Opacity
             var opacity = options['line_opacity'] || 1.0;
             $preview.find('path[id$="-line"]').attr('opacity', opacity);
 
-            // Sync Visibility (Toggles)
-            var modules = ['solar', 'battery', 'ev', 'heatpump', 'weather'];
-            var anyModule = false;
-            modules.forEach(function(m) {
-                var enabled = $('#ha-pf-toggle-' + m).is(':checked');
-                if (m !== 'weather' && enabled) anyModule = true;
-
-                // Simple visibility toggles for the SVG elements
-                if (m === 'solar') {
-                    $preview.find('#ha-pf-pv-line, #ha-pf-pv-path, #ha-pf-pv-title, #ha-pf-pv-power, #ha-pf-pv-energy').toggle(enabled);
-                } else if (m === 'battery') {
-                    $preview.find('#ha-pf-battery-line, #ha-pf-battery-path, #ha-pf-battery-title, #ha-pf-battery-power, #ha-pf-battery-soc').toggle(enabled);
-                } else if (m === 'ev') {
-                    $preview.find('#ha-pf-ev-line, #ha-pf-ev-path, #ha-pf-ev-title, #ha-pf-ev-power, #ha-pf-ev-soc').toggle(enabled);
-                } else if (m === 'heatpump') {
-                    $preview.find('#ha-pf-heatpump-line, #ha-pf-heatpump-path, #ha-pf-heatpump-title, #ha-pf-heatpump-power, #ha-pf-heatpump-efficiency').toggle(enabled);
-                } else if (m === 'weather') {
-                    $preview.find('#ha-pf-weather, #ha-pf-weather-icon-group').toggle(enabled);
-                    $preview.find('#ha-pf-weather').css('font-size', (options['weather_font_size'] || 13) + 'px');
-                }
-            });
-
             $preview.find('#ha-pf-load-line, #ha-pf-load-path').toggle(anyModule);
 
-            // Sync Positions
-            var posMap = {
+            // Sync Core Positions (Grid, Load, Status)
+            var corePos = {
                 'grid_label': ['#ha-pf-grid-title', '#ha-pf-grid-power', '#ha-pf-grid-energy', '#ha-pf-grid-energy-out', '#ha-pf-grid-price-in', '#ha-pf-grid-price-out'],
                 'load_label': ['#ha-pf-home-label', '#ha-pf-load-power', '#ha-pf-load-energy'],
-                'status': ['#ha-pf-flow-label'],
-                'pv_label': ['#ha-pf-pv-title', '#ha-pf-pv-power', '#ha-pf-pv-energy'],
-                'battery_label': ['#ha-pf-battery-title', '#ha-pf-battery-power', '#ha-pf-battery-soc'],
-                'ev_label': ['#ha-pf-ev-title', '#ha-pf-ev-power', '#ha-pf-ev-soc'],
-                'heatpump_label': ['#ha-pf-heatpump-title', '#ha-pf-heatpump-power', '#ha-pf-heatpump-efficiency'],
-                'weather': ['#ha-pf-weather']
+                'status': ['#ha-pf-flow-label']
             };
 
-            for (var key in posMap) {
+            for (var key in corePos) {
                 var x = options[key + '_x'];
                 var y = options[key + '_y'];
                 if (x !== undefined && y !== undefined) {
-                    posMap[key].forEach(function(selector) {
+                    corePos[key].forEach(function(selector) {
                         var $el = $preview.find(selector);
-                        if ($el.is('text')) {
-                            $el.attr('x', x);
-                            // Some text elements have tspans which also need updating
-                            $el.find('tspan').attr('x', x);
-                            
-                            // Adjust Y for different elements in the same group
-                            var baseOffset = 0;
-                            if (selector.includes('power')) baseOffset = 24;
-                            else if (selector.includes('energy') || selector.includes('soc') || selector.includes('efficiency')) baseOffset = 44;
-                            else if (selector.includes('energy-out')) baseOffset = 58;
-                            else if (selector.includes('price-in')) baseOffset = 72;
-                            else if (selector.includes('price-out')) baseOffset = 86;
-                            else if (selector.includes('flow-sub')) baseOffset = 18;
+                        $el.attr('x', x);
+                        $el.find('tspan').attr('x', x);
+                        
+                        var baseOffset = 0;
+                        if (selector.includes('power')) baseOffset = 24;
+                        else if (selector.includes('energy') || selector.includes('soc')) baseOffset = 44;
+                        else if (selector.includes('energy-out')) baseOffset = 58;
+                        else if (selector.includes('price-in')) baseOffset = 72;
+                        else if (selector.includes('price-out')) baseOffset = 86;
+                        else if (selector.includes('flow-sub')) baseOffset = 18;
 
-                            $el.attr('y', parseInt(y) + baseOffset);
-                        }
+                        $el.attr('y', parseInt(y) + baseOffset);
                     });
                 }
             }
-            
-            // Weather icon group transform
-            if (options['weather_x'] !== undefined && options['weather_y'] !== undefined) {
-                $preview.find('#ha-pf-weather-icon-group').attr('transform', `translate(${options['weather_x']}, ${parseInt(options['weather_y']) - 30})`);
-            }
 
-            // Sync Path Data
-            var paths = ['grid_line', 'load_line', 'pv_line', 'battery_line', 'ev_line', 'heatpump_line'];
-            paths.forEach(function(p) {
-                var d = options[p];
-                if (d) {
-                    var id = p.replace('_line', '');
-                    if (id === 'grid') id = ''; else id = id + '-';
-                    $preview.find('#ha-pf-' + id + 'line').attr('d', d);
-                    $preview.find('#ha-pf-' + id + 'path').attr('d', d);
-                }
-            });
+            // Core Paths
+            if (options['grid_line']) {
+                $preview.find('#ha-pf-grid-line, #ha-pf-grid-path').attr('d', options['grid_line']);
+            }
+            if (options['grid_max_capacity']) {
+                $preview.find('#ha-pf-grid-path').attr('data-max-capacity', options['grid_max_capacity']);
+            }
+            if (options['load_line']) {
+                $preview.find('#ha-pf-load-line, #ha-pf-load-path').attr('d', options['load_line']);
+            }
+            if (options['house_max_capacity']) {
+                $preview.find('#ha-pf-load-path').attr('data-max-capacity', options['house_max_capacity']);
+            }
 
             // Sync Custom Entities
             $('#ha-pf-custom-entities-table tbody tr').each(function() {
@@ -628,9 +597,6 @@ jQuery(document).ready(function ($) {
                     $cent.toggle(visible);
                     $cent.attr('transform', `translate(${cx}, ${cy})`);
                     $cent.find('text:first-child').text(label.toUpperCase());
-                } else if (visible) {
-                    // If it doesn't exist in preview yet, we might want to append it, 
-                    // but for simplicity we assume the starting count matches.
                 }
             });
         }
@@ -772,8 +738,273 @@ jQuery(document).ready(function ($) {
         });
     }
 
+    // ── Tab Switching ──────────────────────────────────────────────────────
+    function initTabs() {
+        var $tabs = $('.ha-pf-tab-btn');
+        var $contents = $('.ha-pf-tab-content');
+        var storageKey = 'ha_pf_active_tab';
+
+        function switchTab(tabId) {
+            $tabs.removeClass('active');
+            $contents.removeClass('active');
+
+            $('.ha-pf-tab-btn[data-tab="' + tabId + '"]').addClass('active');
+            $('#ha-pf-tab-' + tabId).addClass('active');
+
+            localStorage.setItem(storageKey, tabId);
+        }
+
+        $tabs.on('click', function() {
+            var tabId = $(this).data('tab');
+            switchTab(tabId);
+        });
+
+        // Load last active tab or default to 'connection'
+        var activeTab = localStorage.getItem(storageKey) || 'connection';
+        // Ensure the tab actually exists (in case of renames)
+        if ($('#ha-pf-tab-' + activeTab).length === 0) activeTab = 'connection';
+        switchTab(activeTab);
+    }
+
+    // ── Theme Presets ─────────────────────────────────────────────────────
+    function initThemePresets() {
+        var $presetSelect = $('#ha-pf-theme-preset');
+        var presets = {
+            cyberpunk: {
+                line_color: '#00f3ff',
+                grid_color: '#ff00ff',
+                load_color: '#00f3ff',
+                pv_color: '#f0ff00',
+                battery_color: '#00ff9f',
+                ev_color: '#bd00ff',
+                heatpump_color: '#ff003c',
+                title_color: '#00f3ff',
+                power_color: '#f0ff00',
+                energy_color: '#ff00ff',
+                line_opacity: '0.8'
+            },
+            high_contrast: {
+                line_color: '#ffffff',
+                grid_color: '#ff3e3e',
+                load_color: '#3e9cff',
+                pv_color: '#ffde34',
+                battery_color: '#00e676',
+                ev_color: '#d500f9',
+                heatpump_color: '#ff1744',
+                title_color: '#ffffff',
+                power_color: '#ffffff',
+                energy_color: '#ffffff',
+                line_opacity: '1.0'
+            },
+            minimalist: {
+                line_color: '#94a3b8',
+                grid_color: '#64748b',
+                load_color: '#94a3b8',
+                pv_color: '#cbd5e1',
+                battery_color: '#94a3b8',
+                ev_color: '#94a3b8',
+                heatpump_color: '#e2e8f0',
+                title_color: '#475569',
+                power_color: '#334155',
+                energy_color: '#64748b',
+                line_opacity: '0.4'
+            },
+            solaredge: {
+                line_color: '#deff00',
+                grid_color: '#deff00',
+                load_color: '#ffffff',
+                pv_color: '#deff00',
+                battery_color: '#10b981',
+                ev_color: '#3b82f6',
+                heatpump_color: '#ef4444',
+                title_color: '#ffffff',
+                power_color: '#deff00',
+                energy_color: '#ffffff',
+                line_opacity: '0.9'
+            },
+            tesla: {
+                line_color: '#e2e8f0',
+                grid_color: '#cc0000',
+                load_color: '#e2e8f0',
+                pv_color: '#ffffff',
+                battery_color: '#e2e8f0',
+                ev_color: '#cc0000',
+                heatpump_color: '#475569',
+                title_color: '#f8fafc',
+                power_color: '#cc0000',
+                energy_color: '#94a3b8',
+                line_opacity: '0.8'
+            },
+            midnight: {
+                line_color: '#6366f1',
+                grid_color: '#818cf8',
+                load_color: '#6366f1',
+                pv_color: '#f59e0b',
+                battery_color: '#10b981',
+                ev_color: '#a855f7',
+                heatpump_color: '#ec4899',
+                title_color: '#e0e7ff',
+                power_color: '#fbbf24',
+                energy_color: '#c7d2fe',
+                line_opacity: '0.7'
+            },
+            forest: {
+                line_color: '#166534',
+                grid_color: '#15803d',
+                load_color: '#166534',
+                pv_color: '#fde047',
+                battery_color: '#22c55e',
+                ev_color: '#4ade80',
+                heatpump_color: '#854d0e',
+                title_color: '#f0fdf4',
+                power_color: '#facc15',
+                energy_color: '#bbf7d0',
+                line_opacity: '0.9'
+            },
+            sunset: {
+                line_color: '#991b1b',
+                grid_color: '#dc2626',
+                load_color: '#991b1b',
+                pv_color: '#fcd34d',
+                battery_color: '#f97316',
+                ev_color: '#fb7185',
+                heatpump_color: '#be123c',
+                title_color: '#fff1f2',
+                power_color: '#fbbf24',
+                energy_color: '#fecaca',
+                line_opacity: '0.8'
+            },
+            matrix: {
+                line_color: '#00ff41',
+                grid_color: '#008f11',
+                load_color: '#00ff41',
+                pv_color: '#003b00',
+                battery_color: '#00ff41',
+                ev_color: '#008f11',
+                heatpump_color: '#003b00',
+                title_color: '#00ff41',
+                power_color: '#00ff41',
+                energy_color: '#008f11',
+                line_opacity: '1.0'
+            },
+            ocean: {
+                line_color: '#075985',
+                grid_color: '#0ea5e9',
+                load_color: '#075985',
+                pv_color: '#f0f9ff',
+                battery_color: '#2dd4bf',
+                ev_color: '#38bdf8',
+                heatpump_color: '#1e40af',
+                title_color: '#f0f9ff',
+                power_color: '#38bdf8',
+                energy_color: '#bae6fd',
+                line_opacity: '0.8'
+            }
+        };
+
+        $presetSelect.on('change', function() {
+            var id = $(this).val();
+            if (id === 'custom') return;
+
+            var theme = presets[id];
+            if (!theme) return;
+
+            // Apply theme to pickers and inputs
+            for (var key in theme) {
+                var $input = $('[name="ha_powerflow_options[' + key + ']"]');
+                if ($input.length) {
+                    $input.val(theme[key]).trigger('change');
+                    
+                    // If it's a color picker, update the iris UI
+                    if ($input.hasClass('wp-color-picker')) {
+                        $input.wpColorPicker('color', theme[key]);
+                    }
+                    
+                    // Update range value display if exists
+                    if ($input.attr('type') === 'range') {
+                        $input.next('.ha-pf-range-val').text(theme[key]);
+                    }
+                }
+            }
+
+            // Force a preview update
+            if (typeof pfUpdatePreview === 'function') {
+                pfUpdatePreview();
+            }
+        });
+
+        // If any visual setting is changed manually, switch preset to "custom"
+        var visualSettings = [
+            'line_color', 'grid_color', 'load_color', 'pv_color', 'battery_color', 
+            'ev_color', 'heatpump_color', 'title_color', 'power_color', 
+            'energy_color', 'line_opacity'
+        ];
+
+        visualSettings.forEach(function(key) {
+            $('[name="ha_powerflow_options[' + key + ']"]').on('change input', function(e) {
+                // If the event was NOT triggered by code (human interaction)
+                if (e.originalEvent) {
+                    $presetSelect.val('custom');
+                }
+            });
+        });
+    }
+
+    function initHealthDashboard() {
+        const $status = $('#ha-pf-health-status-value');
+        const $latency = $('#ha-pf-health-latency');
+        const $rate = $('#ha-pf-health-rate');
+        const $lastSeen = $('#ha-pf-health-last-seen');
+        const $count = $('#ha-pf-health-count');
+        const $refreshBtn = $('#ha-pf-refresh-health');
+
+        if (!$status.length) return;
+
+        function updateHealth() {
+            $refreshBtn.prop('disabled', true).text('Updating...');
+            $.post(haPfAdmin.ajaxUrl, {
+                action: 'ha_pf_get_health',
+                nonce: haPfAdmin.nonce
+            }, function(response) {
+                if (response.success) {
+                    const data = response.data;
+                    $status.text(data.status).removeClass('healthy degraded disconnected').addClass(data.status.toLowerCase());
+                    $latency.text(data.avg_latency + ' ms');
+                    $rate.text(data.success_rate + ' %');
+                    
+                    if (data.last_success > 0) {
+                        const date = new Date(data.last_success * 1000);
+                        $lastSeen.text(date.toLocaleTimeString());
+                    } else {
+                        $lastSeen.text('Never');
+                    }
+                    
+                    $count.text(data.count + ' checks tracked');
+                }
+                $refreshBtn.prop('disabled', false).text('Refresh Now');
+            });
+        }
+
+        // Auto-refresh when maintenance tab is clicked
+        $('.ha-pf-tab-btn[data-tab="maintenance"]').on('click', function() {
+            updateHealth();
+        });
+
+        $refreshBtn.on('click', function() {
+            updateHealth();
+        });
+
+        // Initialize if already on maintenance tab
+        if ($('#ha-pf-tab-maintenance').hasClass('active')) {
+            updateHealth();
+        }
+    }
+
     initPreviewToggle();
     initLivePreview();
     initPreviewSizeSelector();
+    initTabs();
+    initThemePresets();
+    initHealthDashboard();
 
 });

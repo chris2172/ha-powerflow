@@ -1,5 +1,5 @@
 /**
- * HA Powerflow – frontend script  v1.9.0
+ * HA Powerflow – frontend script  v2.1.0
  */
 (function ($) {
     'use strict';
@@ -13,18 +13,9 @@
     var lineOpacity   = parseFloat(haPowerflow.lineOpacity);
     if (isNaN(lineOpacity)) lineOpacity = 1.0;
 
-    if (isPreview) {
-        $status.html('✓ Preview Ready (Real-time Config Active)');
-        return;
-    }
-
     var globalColor   = haPowerflow.lineColor    || '#4a90d9';
     var gridColor     = haPowerflow.gridColor    || globalColor;
     var loadColor     = haPowerflow.loadColor    || globalColor;
-    var pvColor       = haPowerflow.pvColor      || globalColor;
-    var batteryColor  = haPowerflow.batteryColor || globalColor;
-    var evColor       = haPowerflow.evColor      || globalColor;
-    var heatpumpColor = haPowerflow.heatpumpColor|| globalColor;
 
     var $debugBar = $('#ha-pf-debug-bar');
     var $coordPin = $('#ha-pf-coord-pin');
@@ -38,21 +29,29 @@
     // ── Load line elements
     var loadLaserEl = document.getElementById('ha-pf-load-path');
 
-    // ── PV line elements
-    var pvLaserEl = document.getElementById('ha-pf-pv-path');
-    var enableSolar = haPowerflow.enableSolar === 'true';
+    if (isPreview) {
+        $status.html('✓ Preview Ready (Real-time Config Active)');
+        return;
+    }
+    
+    // Module enablement and colors - mapped from new modules structure
+    var mods = haPowerflow.modules || {};
+    
+    var enableSolar    = (mods.solar && mods.solar.enabled === 'true');
+    var pvColor        = (mods.solar && mods.solar.color) || globalColor;
+    var pvLaserEl      = document.getElementById('ha-pf-pv-path');
 
-    // ── Battery line elements
+    var enableBattery  = (mods.battery && mods.battery.enabled === 'true');
+    var batteryColor   = (mods.battery && mods.battery.color) || globalColor;
     var batteryLaserEl = document.getElementById('ha-pf-battery-path');
-    var enableBattery = haPowerflow.enableBattery === 'true';
 
-    // ── EV line elements
-    var evLaserEl = document.getElementById('ha-pf-ev-path');
-    var enableEv = haPowerflow.enableEv === 'true';
+    var enableEv       = (mods.ev && mods.ev.enabled === 'true');
+    var evColor        = (mods.ev && mods.ev.color) || globalColor;
+    var evLaserEl      = document.getElementById('ha-pf-ev-path');
 
-    // ── Heat Pump line elements
+    var enableHeatpump = (mods.heatpump && mods.heatpump.enabled === 'true');
+    var heatpumpColor  = (mods.heatpump && mods.heatpump.color) || globalColor;
     var heatpumpLaserEl = document.getElementById('ha-pf-heatpump-path');
-    var enableHeatpump = haPowerflow.enableHeatpump === 'true';
 
     var forwardPath = lineEl ? lineEl.getAttribute('d') : '';
 
@@ -144,13 +143,17 @@
         if (el) el.textContent = val;
     }
 
-    function dotSpeed(absW) {
-        if (absW === 0 || isNaN(absW)) return null;
-        if (absW <= 100) return '6s';   
-        if (absW <= 300) return '4s';   
-        if (absW <= 500) return '2s';  
-        if (absW <= 1500) return '1.2s';  
-        return '0.7s';                  
+    function dotSpeed(absW, maxCap) {
+        if (!absW || isNaN(absW) || absW < 10) return null;
+        if (!maxCap || isNaN(maxCap)) maxCap = 5000;
+
+        // Calculate percentage of capacity (0.0 to 1.0+)
+        var ratio = Math.min(1.5, absW / maxCap);
+        
+        // Duration curve: Very slow (8s) at low power, fast (0.5s) at overloaded
+        // Using an inverse curve for more natural feel
+        var dur = 0.5 + (7.5 * (1 - Math.pow(ratio, 0.4)));
+        return Math.max(0.4, dur).toFixed(2) + 's';
     }
 
     // ── Dynamic Intensity ──────────────────────────────────────────────────
@@ -169,8 +172,11 @@
             laserEl.setAttribute('data-base-width', baseWidth);
         }
 
-        var scale = Math.min(3, 1 + (absW / 5000)); 
-        var blur = Math.min(6, 2.5 + (absW / 2000));
+        var maxCap = parseFloat(laserEl.getAttribute('data-max-capacity')) || 5000;
+        var ratio = Math.min(1.5, absW / maxCap);
+
+        var scale = 1 + (ratio * 2); // Scales from 1x to 3x (at 100%) to 4x (at 150%)
+        var blur = 2.5 + (ratio * 4.5); // Scales from 2.5px to 7px (at 100%)
 
         var newWidth = (baseWidth * scale).toFixed(1);
         if (laserEl.getAttribute('stroke-width') !== newWidth) {
@@ -306,7 +312,8 @@
 
         // ── Grid laser ──────────────────────────────────────────────────────
         var absGrid = Math.abs(gridPower);
-        var gridDur = dotSpeed(isNaN(gridPower) ? 0 : absGrid);
+        var gridMax = parseFloat(laserEl ? laserEl.getAttribute('data-max-capacity') : 10000);
+        var gridDur = dotSpeed(isNaN(gridPower) ? 0 : absGrid, gridMax);
         var gridPulses = getPulseCount(absGrid);
 
         if (!gridDur || absGrid < 50) {
@@ -405,7 +412,8 @@
         if (anyModule && loadLaserEl) {
             var loadVal = isNaN(loadPower) ? gridPower : loadPower;
             var absLoad = Math.abs(loadVal);
-            var loadDur = dotSpeed(absLoad);
+            var loadMax = parseFloat(loadLaserEl.getAttribute('data-max-capacity')) || 8000;
+            var loadDur = dotSpeed(absLoad, loadMax);
             var loadPulses = getPulseCount(absLoad);
             
             // Smart Palette for House
@@ -424,7 +432,8 @@
         // ── PV laser ────────────────────────────────────────────────────────
         if (enableSolar && pvLaserEl) {
             var absPv = Math.abs(isNaN(pvPower) ? 0 : pvPower);
-            var pvDur = dotSpeed(absPv);
+            var pvMax = parseFloat(pvLaserEl.getAttribute('data-max-capacity')) || 6000;
+            var pvDur = dotSpeed(absPv, pvMax);
             var pvPulses = getPulseCount(absPv);
             
             // Smart Palette for PV
@@ -443,7 +452,8 @@
         // ── Battery laser ───────────────────────────────────────────────────
         if (enableBattery && batteryLaserEl) {
             var absBat = Math.abs(isNaN(batteryPower) ? 0 : batteryPower);
-            var batDur = dotSpeed(absBat);
+            var batMax = parseFloat(batteryLaserEl.getAttribute('data-max-capacity')) || 5000;
+            var batDur = dotSpeed(absBat, batMax);
             var batPulses = getPulseCount(absBat);
 
             // Smart Palette for Battery
@@ -467,15 +477,14 @@
                 }
                 animateLaser(batteryLaserEl, batDur, batPathChanged, false, activeBatColor, batPulses, absBat);
             } else {
-                $widget[0].style.setProperty('--ha-pf-battery-color', batteryColor);
-                stopLaser(batteryLaserEl);
             }
         }
 
         // ── EV laser ────────────────────────────────────────────────────────
         if (enableEv && evLaserEl) {
             var absEv = Math.abs(isNaN(evPower) ? 0 : evPower);
-            var evDur = dotSpeed(absEv);
+            var evMax = parseFloat(evLaserEl.getAttribute('data-max-capacity')) || 7000;
+            var evDur = dotSpeed(absEv, evMax);
             var evPulses = getPulseCount(absEv);
 
             // Smart Palette for EV
@@ -494,7 +503,8 @@
         // ── Heat Pump laser ─────────────────────────────────────────────────
         if (enableHeatpump && heatpumpLaserEl) {
             var absHp = Math.abs(isNaN(heatpumpPower) ? 0 : heatpumpPower);
-            var hpDur = dotSpeed(absHp);
+            var hpMax = parseFloat(heatpumpLaserEl.getAttribute('data-max-capacity')) || 5000;
+            var hpDur = dotSpeed(absHp, hpMax);
             var hpPulses = getPulseCount(absHp);
 
             // Smart Palette for Heat Pump
@@ -653,6 +663,8 @@
                     });
                 }
 
+
+
                 if (missing.length) {
                     $status.addClass('ha-pf-error').text('⚠ Missing entity IDs: ' + missing.join(', ') + ' — check Settings.');
                 } else if (
@@ -684,6 +696,18 @@
     $(document).ready(function () {
         fetchData();
         setInterval(fetchData, haPowerflow.refreshInterval);
+
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                var swUrl = haPowerflow.pluginUrl + 'assets/sw.js';
+                navigator.serviceWorker.register(swUrl).then(function(registration) {
+                    if (debugMode) console.log('HA Powerflow: SW registered with scope: ', registration.scope);
+                }, function(err) {
+                    if (debugMode) console.log('HA Powerflow: SW registration failed: ', err);
+                });
+            });
+        }
     });
 
 })(jQuery);

@@ -11,6 +11,7 @@ class HA_Powerflow_Ajax {
         add_action( 'wp_ajax_ha_powerflow_download_snapshot', [ __CLASS__, 'download_snapshot' ] );
         add_action( 'wp_ajax_ha_powerflow_upload_snapshot',   [ __CLASS__, 'upload_snapshot' ] );
         add_action( 'wp_ajax_ha_powerflow_discover_entities', [ __CLASS__, 'discover_entities' ] );
+        add_action( 'wp_ajax_ha_pf_get_health', [ __CLASS__, 'ajax_get_health' ] );
 
         // Register the new REST API route for the frontend polling
         add_action( 'rest_api_init', [ __CLASS__, 'register_rest_routes' ] );
@@ -37,6 +38,7 @@ class HA_Powerflow_Ajax {
             wp_send_json_error( 'URL and token are required.' );
         }
 
+        $start_time = microtime( true );
         $response = wp_remote_get( $ha_url . '/api/', [
             'headers' => [
                 'Authorization' => 'Bearer ' . $ha_token,
@@ -45,15 +47,21 @@ class HA_Powerflow_Ajax {
             'timeout'   => 8,
             'sslverify' => true,
         ] );
+        $end_time = microtime( true );
+        $latency = round( ( $end_time - $start_time ) * 1000, 2 );
 
         if ( is_wp_error( $response ) ) {
+            self::record_health_metric( $latency, false );
             wp_send_json_error( 'Could not reach Home Assistant: ' . $response->get_error_message() );
         }
 
         $code = wp_remote_retrieve_response_code( $response );
         $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        $success = ( $code === 200 && isset( $body['message'] ) );
 
-        if ( $code === 200 && isset( $body['message'] ) ) {
+        self::record_health_metric( $latency, $success );
+
+        if ( $success ) {
             wp_send_json_success( 'Connected successfully — ' . esc_html( $body['message'] ) );
         } elseif ( $code === 401 ) {
             wp_send_json_error( 'Authorisation failed — check your Access Token.' );
@@ -154,20 +162,26 @@ class HA_Powerflow_Ajax {
                 return rest_ensure_response( $cached_data );
             }
 
+            $start_time = microtime( true );
             $response = wp_remote_post( $ha_url . '/api/template', [
                 'headers'   => $headers,
                 'body'      => json_encode( [ 'template' => $template_content ] ),
                 'timeout'   => 4,
                 'sslverify' => true,
             ] );
+            $end_time = microtime( true );
+            $latency = round( ( $end_time - $start_time ) * 1000, 2 );
 
             if ( is_wp_error( $response ) ) {
+                self::record_health_metric( $latency, false );
                 return new WP_Error( 'ha_error', 'Could not reach Home Assistant: ' . $response->get_error_message(), [ 'status' => 500 ] );
             }
 
             $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            $success = is_array( $body );
+            self::record_health_metric( $latency, $success );
 
-            if ( is_array( $body ) ) {
+            if ( $success ) {
                 // Return data formatted the same way JS expects.
                 foreach ( $body as $k => $v ) {
                     $data[ $k ] = [
@@ -175,6 +189,7 @@ class HA_Powerflow_Ajax {
                         'unit'  => ( isset( $v['unit'] ) && $v['unit'] !== null ) ? $v['unit'] : '',
                     ];
                 }
+
                 set_transient( $cache_key, $data, 5 );
             } else {
                 return new WP_Error( 'ha_invalid', 'Invalid response from Home Assistant.', [ 'status' => 500 ] );
@@ -306,6 +321,77 @@ class HA_Powerflow_Ajax {
 
         update_option( 'ha_powerflow_options', $data );
         wp_send_json_success( 'Backup uploaded and applied successfully.' );
+    }
+
+    public static function ajax_get_health() {
+        check_ajax_referer( 'ha_pf_test_connection', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorised.' );
+        wp_send_json_success( self::get_health_stats() );
+    }
+
+    private static function record_health_metric( $latency, $success ) {
+        $stats = get_option( 'ha_pf_health_stats', [
+            'history' => [],
+            'last_success' => 0,
+            'last_check' => 0
+        ] );
+
+        $stats['history'][] = [
+            'latency' => $latency,
+            'success' => $success,
+            'time'    => time()
+        ];
+        
+        // Keep last 50 checks
+        if ( count( $stats['history'] ) > 50 ) {
+            array_shift( $stats['history'] );
+        }
+
+        if ( $success ) {
+            $stats['last_success'] = time();
+        }
+        $stats['last_check'] = time();
+
+        update_option( 'ha_pf_health_stats', $stats, false );
+    }
+
+    private static function get_health_stats() {
+        $stats = get_option( 'ha_pf_health_stats', [
+            'history' => [],
+            'last_success' => 0,
+            'last_check' => 0
+        ] );
+
+        if ( empty( $stats['history'] ) ) {
+            return [
+                'status'       => 'No data',
+                'avg_latency'  => 0,
+                'success_rate' => 0,
+                'last_success' => $stats['last_success'],
+                'last_check'   => $stats['last_check']
+            ];
+        }
+
+        $latencies = wp_list_pluck( $stats['history'], 'latency' );
+        $successes = wp_list_pluck( $stats['history'], 'success' );
+        
+        $avg_latency  = array_sum( $latencies ) / count( $latencies );
+        $success_rate = ( array_sum( array_map( 'intval', $successes ) ) / count( $successes ) ) * 100;
+
+        $status = 'Healthy';
+        if ( $success_rate < 90 ) $status = 'Degraded';
+        if ( end( $stats['history'] )['success'] === false && ( time() - $stats['last_success'] > 60 ) ) {
+            $status = 'Disconnected';
+        }
+
+        return [
+            'status'       => $status,
+            'avg_latency'  => round( $avg_latency, 2 ),
+            'success_rate' => round( $success_rate, 1 ),
+            'last_success' => $stats['last_success'],
+            'last_check'   => $stats['last_check'],
+            'count'        => count( $stats['history'] )
+        ];
     }
 
     private static function parse_yaml( $content ) {

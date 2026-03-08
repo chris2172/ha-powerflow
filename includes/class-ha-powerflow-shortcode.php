@@ -19,17 +19,20 @@ class HA_Powerflow_Shortcode {
         wp_enqueue_script( 'ha-powerflow-script' );
 
         $o  = get_option( 'ha_powerflow_options', [] );
+        $all_modules = HA_Powerflow_Modules::get_all();
 
         $bg_image = ! empty( $o['bg_image'] )
                     ? esc_url( $o['bg_image'] )
                     : esc_url( HA_POWERFLOW_URL . 'assets/images/ha-powerflow.webp' );
         $debug    = ! empty( $o['debug'] )    ? 'true' : 'false';
 
-        $any_module = ( ! empty( $o['enable_solar'] )    ||
-                        ! empty( $o['enable_battery'] )  ||
-                        ! empty( $o['enable_ev'] )       ||
-                        ! empty( $o['enable_heatpump'] ) ||
-                        ! empty( $o['enable_weather'] ) );
+        $any_module = false;
+        foreach ( $all_modules as $key => $m ) {
+            if ( ! empty( $o['enable_' . $key] ) ) {
+                $any_module = true;
+                break;
+            }
+        }
 
         $grid_line = ( isset( $o['grid_line'] ) && $o['grid_line'] !== '' )
                      ? $o['grid_line'] : 'M 120,350 L 880,350';
@@ -37,17 +40,20 @@ class HA_Powerflow_Shortcode {
         $load_line = ( isset( $o['load_line'] ) && $o['load_line'] !== '' )
                      ? $o['load_line'] : 'M 500,350 L 880,350';
 
-        $pv_line   = ( isset( $o['pv_line'] ) && $o['pv_line'] !== '' )
-                     ? $o['pv_line']   : 'M 500,150 L 500,350';
+        // Prepare module-specific data
+        $module_data = [];
+        foreach ( $all_modules as $key => $m ) {
+            $id_prefix = $m['id_prefix'];
+            if ( ! empty( $m['is_weather'] ) ) continue;
 
-        $battery_line = ( isset( $o['battery_line'] ) && $o['battery_line'] !== '' )
-                        ? $o['battery_line'] : 'M 500,350 L 500,550';
-
-        $ev_line      = ( isset( $o['ev_line'] ) && $o['ev_line'] !== '' )
-                        ? $o['ev_line']       : 'M 750,350 L 750,550';
-
-        $heatpump_line = ( isset( $o['heatpump_line'] ) && $o['heatpump_line'] !== '' )
-                         ? $o['heatpump_line'] : 'M 250,350 L 250,550';
+            $module_data[$key] = [
+                'line' => ( isset( $o[$id_prefix . '_line'] ) && $o[$id_prefix . '_line'] !== '' )
+                          ? $o[$id_prefix . '_line'] : $m['default_path'],
+                'x'    => (int) ( $o[$id_prefix . '_label_x'] ?? $m['default_pos']['x'] ),
+                'y'    => (int) ( $o[$id_prefix . '_label_y'] ?? $m['default_pos']['y'] ),
+                'enabled' => ! empty( $o['enable_' . $key] )
+            ];
+        }
 
         $line_color   = ! empty( $o['line_color'] )   ? $o['line_color'] : '#4a90d9';
         $line_opacity = isset( $o['line_opacity'] )   ? floatval( $o['line_opacity'] ) : 1.0;
@@ -55,37 +61,27 @@ class HA_Powerflow_Shortcode {
 
         $title_color  = ! empty( $o['title_color'] )  ? $o['title_color']  : '#8899bb';
         $power_color  = ! empty( $o['power_color'] )  ? $o['power_color']  : '#f0a500';
-        $grid_color     = ! empty( $o['grid_color'] ) ? $o['grid_color'] : $line_color;
-        $load_color     = ! empty( $o['load_color'] ) ? $o['load_color'] : $line_color;
-        $pv_color       = ! empty( $o['pv_color'] )   ? $o['pv_color']   : $line_color;
-        $battery_color  = ! empty( $o['battery_color']) ? $o['battery_color'] : $line_color;
-        $ev_color       = ! empty( $o['ev_color'] )   ? $o['ev_color']   : $line_color;
-        $heatpump_color = ! empty( $o['heatpump_color'])? $o['heatpump_color']: $line_color;
         $energy_color = ! empty( $o['energy_color'] ) ? $o['energy_color'] : '#6677aa';
 
-        // Label positions
+        $grid_color     = ! empty( $o['grid_color'] ) ? $o['grid_color'] : $line_color;
+        $load_color     = ! empty( $o['load_color'] ) ? $o['load_color'] : $line_color;
+
+        // Label positions for core
         $gx = (int) ( $o['grid_label_x'] ?? 120 );
         $gy = (int) ( $o['grid_label_y'] ?? 260 );
         $hx = (int) ( $o['load_label_x'] ?? 880 );
         $hy = (int) ( $o['load_label_y'] ?? 260 );
-        $px = (int) ( $o['pv_label_x']      ?? 500 );
-        $py = (int) ( $o['pv_label_y']      ?? 150 );
-        $bx = (int) ( $o['battery_label_x']  ?? 500 );
-        $by = (int) ( $o['battery_label_y']  ?? 550 );
-        $ex = (int) ( $o['ev_label_x']       ?? 750 );
-        $ey = (int) ( $o['ev_label_y']       ?? 550 );
-        $hx2 = (int) ( $o['heatpump_label_x'] ?? 250 );
-        $hy2 = (int) ( $o['heatpump_label_y'] ?? 550 );
 
-        // Status (flow label) position — fully user-controlled
+        // Status (flow label) position
         $sx = (int) ( $o['status_x'] ?? 500 );
         $sy = (int) ( $o['status_y'] ?? 320 );
 
         // Weather position
         $wx = (int) ( $o['weather_x'] ?? 500 );
         $wy = (int) ( $o['weather_y'] ?? 80 );
+;
 
-        wp_localize_script( 'ha-powerflow-script', 'haPowerflow', [
+        $localized_data = [
             'restUrl'         => esc_url_raw( rest_url( 'ha-powerflow/v1/data' ) ),
             'nonce'           => wp_create_nonce( 'ha_powerflow_nonce' ),
             'refreshInterval' => (int) ( $o['refresh_rate'] ?? 5000 ),
@@ -93,16 +89,6 @@ class HA_Powerflow_Shortcode {
             'lineColor'       => $line_color,
             'gridColor'       => $grid_color,
             'loadColor'       => $load_color,
-            'pvColor'         => $pv_color,
-            'batteryColor'    => $battery_color,
-            'evColor'         => $ev_color,
-            'heatpumpColor'   => $heatpump_color,
-            'isCustomGrid'    => ! empty( $o['grid_color'] ) ? 'true' : 'false',
-            'isCustomHouse'   => ! empty( $o['load_color'] ) ? 'true' : 'false',
-            'isCustomPv'      => ! empty( $o['pv_color'] )   ? 'true' : 'false',
-            'isCustomBattery' => ! empty( $o['battery_color']) ? 'true' : 'false',
-            'isCustomEv'      => ! empty( $o['ev_color'] )    ? 'true' : 'false',
-            'isCustomHp'      => ! empty( $o['heatpump_color'] ) ? 'true' : 'false',
             'lineOpacity'     => $line_opacity,
             'haUrl'           => ! empty( $o['ha_url'] )   ? 'set' : 'missing',
             'haToken'         => ! empty( $o['ha_token'] ) ? 'set' : 'missing',
@@ -113,39 +99,54 @@ class HA_Powerflow_Shortcode {
             'gridPriceIn'     => $o['grid_price_in'] ?? '',
             'gridPriceOut'    => $o['grid_price_out'] ?? '',
             'loadEnergy'      => $o['load_energy'] ?? '',
-            'pvPower'         => $o['pv_power']          ?? '',
-            'pvEnergy'        => $o['pv_energy']         ?? '',
-            'enableSolar'     => ! empty( $o['enable_solar'] )   ? 'true' : 'false',
-            'batteryPower'     => $o['battery_power']      ?? '',
-            'batteryInEnergy'  => $o['battery_in_energy']  ?? '',
-            'batteryOutEnergy' => $o['battery_out_energy'] ?? '',
-            'batterySoc'       => $o['battery_soc']        ?? '',
-            'enableBattery'    => ! empty( $o['enable_battery'] )  ? 'true' : 'false',
-            'evPower'          => $o['ev_power']            ?? '',
-            'evSoc'            => $o['ev_soc']              ?? '',
-            'enableEv'         => ! empty( $o['enable_ev'] )       ? 'true' : 'false',
-            'heatpumpPower'    => $o['heatpump_power']      ?? '',
-            'heatpumpEnergy'   => $o['heatpump_energy']     ?? '',
-            'heatpumpEfficiency'=> $o['heatpump_efficiency'] ?? '',
-            'enableHeatpump'   => ! empty( $o['enable_heatpump'] ) ? 'true' : 'false',
             'enableWeather'    => ! empty( $o['enable_weather'] )  ? 'true' : 'false',
             'weatherFontSize'  => (int) ( $o['weather_font_size'] ?? 13 ),
             'customEntities'   => ! empty( $o['custom_entities'] ) ? $o['custom_entities'] : [],
-        ] );
+            'gridMaxCapacity'  => (int) ( $o['grid_max_capacity'] ?? 10000 ),
+            'houseMaxCapacity' => (int) ( $o['house_max_capacity'] ?? 8000 ),
+            'swUrl'            => HA_POWERFLOW_URL . 'assets/sw.js',
+            'modules'          => []
+        ];
+
+        $css_vars = "
+            --ha-pf-title-color: " . esc_attr($title_color) . ";
+            --ha-pf-power-color: " . esc_attr($power_color) . ";
+            --ha-pf-energy-color: " . esc_attr($energy_color) . ";
+            --ha-pf-grid-color: " . esc_attr($grid_color) . ";
+            --ha-pf-load-color: " . esc_attr($load_color) . ";
+        ";
+
+        foreach ( $all_modules as $key => $m ) {
+            if ( ! empty($m['is_weather']) ) continue;
+            $prefix = $m['id_prefix'];
+            $color = ! empty( $o[$prefix . '_color'] ) ? $o[$prefix . '_color'] : $line_color;
+            
+            $localized_data['modules'][$key] = [
+                'prefix'  => $prefix,
+                'enabled' => ! empty( $o['enable_' . $key] ) ? 'true' : 'false',
+                'color'   => $color,
+                'power'   => $o[$prefix . '_power'] ?? '',
+                'soc'     => ! empty($m['has_soc']) ? ($o[$prefix . '_soc'] ?? '') : '',
+                'energy'  => ! empty($m['has_energy']) ? ($o[$prefix . '_energy'] ?? '') : '',
+                'eff'     => ! empty($m['has_eff']) ? ($o[$prefix . '_efficiency'] ?? '') : '',
+                'maxCapacity' => (int) ( $o[$prefix . '_max_capacity'] ?? ($m['default_capacity'] ?? 0) ),
+            ];
+
+            // Special handling for battery energy split
+            if ( $key === 'battery' ) {
+                $localized_data['modules'][$key]['energyIn'] = $o['battery_in_energy'] ?? '';
+                $localized_data['modules'][$key]['energyOut'] = $o['battery_out_energy'] ?? '';
+            }
+
+            $css_vars .= " --ha-pf-{$prefix}-color: " . esc_attr($color) . ";";
+        }
+
+        wp_localize_script( 'ha-powerflow-script', 'haPowerflow', $localized_data );
 
         ob_start(); ?>
         <div class="ha-powerflow-widget"
              data-debug="<?php echo esc_attr( $debug ); ?>"
-             style="background-image:url(<?php echo $bg_image; ?>);
-                    --ha-pf-title-color: <?php echo esc_attr($title_color); ?>;
-                    --ha-pf-power-color: <?php echo esc_attr($power_color); ?>;
-                    --ha-pf-energy-color: <?php echo esc_attr($energy_color); ?>;
-                    --ha-pf-grid-color: <?php echo esc_attr($grid_color); ?>;
-                    --ha-pf-load-color: <?php echo esc_attr($load_color); ?>;
-                    --ha-pf-pv-color: <?php echo esc_attr($pv_color); ?>;
-                    --ha-pf-battery-color: <?php echo esc_attr($battery_color); ?>;
-                    --ha-pf-ev-color: <?php echo esc_attr($ev_color); ?>;
-                    --ha-pf-heatpump-color: <?php echo esc_attr($heatpump_color); ?>;">
+             style="background-image:url(<?php echo $bg_image; ?>); <?php echo $css_vars; ?>">
 
             <div class="ha-pf-debug-bar" id="ha-pf-debug-bar">
                 🐛 Debug Mode &nbsp;|&nbsp; Click anywhere on the widget to read SVG coordinates
@@ -188,7 +189,8 @@ class HA_Powerflow_Shortcode {
                       d="<?php echo esc_attr( $grid_line ); ?>"
                       fill="none"
                       stroke-width="2.0" stroke-linecap="round"
-                      filter="url(#hapf-glow)" opacity="0"/>
+                      filter="url(#hapf-glow)" opacity="0"
+                      data-max-capacity="<?php echo (int)($o['grid_max_capacity'] ?? 10000); ?>"/>
 
                 <?php if ( is_admin() || $any_module ) : ?>
                 <!-- ── Load Line (Inverter→Home) — visible when modules active ─ -->
@@ -201,64 +203,30 @@ class HA_Powerflow_Shortcode {
                       d="<?php echo esc_attr( $load_line ); ?>"
                       fill="none"
                       stroke-width="2.0" stroke-linecap="round"
-                      filter="url(#hapf-glow)" opacity="0"/>
+                      filter="url(#hapf-glow)" opacity="0"
+                      data-max-capacity="<?php echo (int)($o['house_max_capacity'] ?? 8000); ?>"/>
                 <?php endif; ?>
 
-                <?php if ( is_admin() || ! empty( $o['enable_solar'] ) ) : ?>
-                <!-- ── PV Line (Solar→Inverter) — visible when solar is enabled ─ -->
-                <path id="ha-pf-pv-line"
-                      d="<?php echo esc_attr( $pv_line ); ?>"
-                      fill="none"
-                      stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"
-                      opacity="<?php echo esc_attr( $line_opacity ); ?>"/>
-                <path id="ha-pf-pv-path" class="ha-pf-laser"
-                      d="<?php echo esc_attr( $pv_line ); ?>"
-                      fill="none"
-                      stroke-width="2.0" stroke-linecap="round"
-                      filter="url(#hapf-glow)" opacity="0"/>
-                <?php endif; ?>
-
-                <?php if ( is_admin() || ! empty( $o['enable_battery'] ) ) : ?>
-                <!-- ── Battery Line (Inverter↔Battery) — visible when battery is enabled ─ -->
-                <path id="ha-pf-battery-line"
-                      d="<?php echo esc_attr( $battery_line ); ?>"
-                      fill="none"
-                      stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"
-                      opacity="<?php echo esc_attr( $line_opacity ); ?>"/>
-                <path id="ha-pf-battery-path" class="ha-pf-laser"
-                      d="<?php echo esc_attr( $battery_line ); ?>"
-                      fill="none"
-                      stroke-width="2.0" stroke-linecap="round"
-                      filter="url(#hapf-glow)" opacity="0"/>
-                <?php endif; ?>
-
-                <?php if ( is_admin() || ! empty( $o['enable_ev'] ) ) : ?>
-                <!-- ── EV Line (Inverter→EV) — visible when EV is enabled ─ -->
-                <path id="ha-pf-ev-line"
-                      d="<?php echo esc_attr( $ev_line ); ?>"
-                      fill="none"
-                      stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"
-                      opacity="<?php echo esc_attr( $line_opacity ); ?>"/>
-                <path id="ha-pf-ev-path" class="ha-pf-laser"
-                      d="<?php echo esc_attr( $ev_line ); ?>"
-                      fill="none"
-                      stroke-width="2.0" stroke-linecap="round"
-                      filter="url(#hapf-glow)" opacity="0"/>
-                <?php endif; ?>
-
-                <?php if ( is_admin() || ! empty( $o['enable_heatpump'] ) ) : ?>
-                <!-- ── Heat Pump Line (Inverter→Heat Pump) — visible when Heat Pump is enabled ─ -->
-                <path id="ha-pf-heatpump-line"
-                      d="<?php echo esc_attr( $heatpump_line ); ?>"
-                      fill="none"
-                      stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"
-                      opacity="<?php echo esc_attr( $line_opacity ); ?>"/>
-                <path id="ha-pf-heatpump-path" class="ha-pf-laser"
-                      d="<?php echo esc_attr( $heatpump_line ); ?>"
-                      fill="none"
-                      stroke-width="4.5" stroke-linecap="round"
-                      filter="url(#hapf-glow)" opacity="0"/>
-                <?php endif; ?>
+                <?php
+                // Render Module Paths
+                foreach ( $module_data as $key => $m ) :
+                    $id_prefix = $all_modules[$key]['id_prefix'];
+                    $visible = is_admin() || $m['enabled'];
+                    $stroke_width = ($key === 'heatpump') ? '4.5' : '2.0';
+                    if ( $visible ) : ?>
+                    <path id="ha-pf-<?php echo $id_prefix; ?>-line"
+                          d="<?php echo esc_attr( $m['line'] ); ?>"
+                          fill="none"
+                          stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"
+                          opacity="<?php echo esc_attr( $line_opacity ); ?>"/>
+                    <path id="ha-pf-<?php echo $id_prefix; ?>-path" class="ha-pf-laser"
+                          d="<?php echo esc_attr( $m['line'] ); ?>"
+                          fill="none"
+                          stroke-width="<?php echo $stroke_width; ?>" stroke-linecap="round"
+                          filter="url(#hapf-glow)" opacity="0"
+                          data-max-capacity="<?php echo (int)($o[$id_prefix . '_max_capacity'] ?? ($all_modules[$key]['default_capacity'] ?? 0)); ?>"/>
+                    <?php endif;
+                endforeach; ?>
 
                 <?php if ( is_admin() || ! empty( $o['enable_weather'] ) ) : ?>
                 <!-- ── Weather Icon ─────────────────────────────────── -->
@@ -331,85 +299,46 @@ class HA_Powerflow_Shortcode {
                       font-family="'Exo 2', sans-serif" font-size="12"
                       filter="url(#hapf-shadow)">—</text>
 
-                <?php if ( is_admin() || ! empty( $o['enable_solar'] ) ) : ?>
-                <!-- ── PV label block ────────────────────────────────────────── -->
-                <text id="ha-pf-pv-title"
-                      x="<?php echo $px; ?>" y="<?php echo $py; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif"
-                      font-size="11" font-weight="700" letter-spacing="2"
-                      filter="url(#hapf-shadow)">SOLAR</text>
-                <text id="ha-pf-pv-power"
-                      x="<?php echo $px; ?>" y="<?php echo $py + 24; ?>"
-                      text-anchor="middle"
-                      font-family="Orbitron, sans-serif" font-size="19" font-weight="700"
-                      filter="url(#hapf-shadow)">—</text>
-                <text id="ha-pf-pv-energy"
-                      x="<?php echo $px; ?>" y="<?php echo $py + 44; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif" font-size="12"
-                      filter="url(#hapf-shadow)">—</text>
-                <?php endif; ?>
-
-                <?php if ( is_admin() || ! empty( $o['enable_battery'] ) ) : ?>
-                <!-- ── Battery label block ───────────────────────────────────── -->
-                <text id="ha-pf-battery-title"
-                      x="<?php echo $bx; ?>" y="<?php echo $by; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif"
-                      font-size="11" font-weight="700" letter-spacing="2"
-                      filter="url(#hapf-shadow)">BATTERY</text>
-                <text id="ha-pf-battery-power"
-                      x="<?php echo $bx; ?>" y="<?php echo $by + 24; ?>"
-                      text-anchor="middle"
-                      font-family="Orbitron, sans-serif" font-size="19" font-weight="700"
-                      filter="url(#hapf-shadow)">—</text>
-                <text id="ha-pf-battery-soc"
-                      x="<?php echo $bx; ?>" y="<?php echo $by + 44; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif" font-size="12"
-                      filter="url(#hapf-shadow)">—</text>
-                <?php endif; ?>
-
-                <?php if ( is_admin() || ! empty( $o['enable_ev'] ) ) : ?>
-                <!-- ── EV label block ────────────────────────────────────────── -->
-                <text id="ha-pf-ev-title"
-                      x="<?php echo $ex; ?>" y="<?php echo $ey; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif"
-                      font-size="11" font-weight="700" letter-spacing="2"
-                      filter="url(#hapf-shadow)">EV</text>
-                <text id="ha-pf-ev-power"
-                      x="<?php echo $ex; ?>" y="<?php echo $ey + 24; ?>"
-                      text-anchor="middle"
-                      font-family="Orbitron, sans-serif" font-size="19" font-weight="700"
-                      filter="url(#hapf-shadow)">—</text>
-                <text id="ha-pf-ev-soc"
-                      x="<?php echo $ex; ?>" y="<?php echo $ey + 44; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif" font-size="12"
-                      filter="url(#hapf-shadow)">—</text>
-                <?php endif; ?>
-
-                <?php if ( is_admin() || ! empty( $o['enable_heatpump'] ) ) : ?>
-                <!-- ── Heat Pump label block ─────────────────────────────────── -->
-                <text id="ha-pf-heatpump-title"
-                      x="<?php echo $hx2; ?>" y="<?php echo $hy2; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif"
-                      font-size="11" font-weight="700" letter-spacing="2"
-                      filter="url(#hapf-shadow)">HEAT PUMP</text>
-                <text id="ha-pf-heatpump-power"
-                      x="<?php echo $hx2; ?>" y="<?php echo $hy2 + 24; ?>"
-                      text-anchor="middle"
-                      font-family="Orbitron, sans-serif" font-size="19" font-weight="700"
-                      filter="url(#hapf-shadow)">—</text>
-                <text id="ha-pf-heatpump-efficiency"
-                      x="<?php echo $hx2; ?>" y="<?php echo $hy2 + 44; ?>"
-                      text-anchor="middle"
-                      font-family="'Exo 2', sans-serif" font-size="12"
-                      filter="url(#hapf-shadow)">—</text>
-                <?php endif; ?>
+                <?php
+                // Render Module Labels
+                foreach ( $module_data as $key => $m ) :
+                    $id_prefix = $all_modules[$key]['id_prefix'];
+                    $visible = is_admin() || $m['enabled'];
+                    if ( $visible ) : ?>
+                    <g id="ha-pf-<?php echo $id_prefix; ?>-group">
+                        <text id="ha-pf-<?php echo $id_prefix; ?>-title"
+                              x="<?php echo $m['x']; ?>" y="<?php echo $m['y']; ?>"
+                              text-anchor="middle"
+                              font-family="'Exo 2', sans-serif"
+                              font-size="11" font-weight="700" letter-spacing="2"
+                              filter="url(#hapf-shadow)"><?php echo strtoupper($all_modules[$key]['label']); ?></text>
+                        <text id="ha-pf-<?php echo $id_prefix; ?>-power"
+                              x="<?php echo $m['x']; ?>" y="<?php echo $m['y'] + 24; ?>"
+                              text-anchor="middle"
+                              font-family="Orbitron, sans-serif" font-size="19" font-weight="700"
+                              filter="url(#hapf-shadow)">—</text>
+                        <?php if ( ! empty($all_modules[$key]['has_soc']) ) : ?>
+                            <text id="ha-pf-<?php echo $id_prefix; ?>-soc"
+                                  x="<?php echo $m['x']; ?>" y="<?php echo $m['y'] + 44; ?>"
+                                  text-anchor="middle"
+                                  font-family="'Exo 2', sans-serif" font-size="12"
+                                  filter="url(#hapf-shadow)">—</text>
+                        <?php elseif ( ! empty($all_modules[$key]['has_energy']) && ! empty($all_modules[$key]['has_eff']) ) : ?>
+                             <text id="ha-pf-<?php echo $id_prefix; ?>-efficiency"
+                                  x="<?php echo $m['x']; ?>" y="<?php echo $m['y'] + 44; ?>"
+                                  text-anchor="middle"
+                                  font-family="'Exo 2', sans-serif" font-size="12"
+                                  filter="url(#hapf-shadow)">—</text>
+                        <?php elseif ( ! empty($all_modules[$key]['has_energy']) ) : ?>
+                             <text id="ha-pf-<?php echo $id_prefix; ?>-energy"
+                                  x="<?php echo $m['x']; ?>" y="<?php echo $m['y'] + 44; ?>"
+                                  text-anchor="middle"
+                                  font-family="'Exo 2', sans-serif" font-size="12"
+                                  filter="url(#hapf-shadow)">—</text>
+                        <?php endif; ?>
+                    </g>
+                    <?php endif;
+                endforeach; ?>
 
                 <?php if ( is_admin() || ! empty( $o['enable_weather'] ) ) : ?>
                 <text id="ha-pf-weather"

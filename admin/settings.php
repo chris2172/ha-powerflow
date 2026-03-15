@@ -226,6 +226,22 @@ function ha_powerflow_sanitize( $input ) {
             $output['battery_in_energy']  = sanitize_text_field( $input['battery_in_energy']  ?? '' );
             $output['battery_out_energy'] = sanitize_text_field( $input['battery_out_energy'] ?? '' );
         }
+
+        // EV extra fields
+        if ( $key === 'ev' ) {
+            $output['ev_charge_added']     = sanitize_text_field( $input['ev_charge_added']     ?? '' );
+            $output['ev_charge_added_vis'] = ! empty( $input['ev_charge_added_vis'] )  ? '1' : '';
+            $output['ev_plug_status']      = sanitize_text_field( $input['ev_plug_status']      ?? '' );
+            $output['ev_plug_status_vis']  = ! empty( $input['ev_plug_status_vis'] )   ? '1' : '';
+            $output['ev_charge_mode']      = sanitize_text_field( $input['ev_charge_mode']      ?? '' );
+            $output['ev_charge_mode_vis']  = ! empty( $input['ev_charge_mode_vis'] )   ? '1' : '';
+            $output['ev_charger_cost']     = sanitize_text_field( $input['ev_charger_cost']     ?? '' );
+            $output['ev_charger_cost_vis'] = ! empty( $input['ev_charger_cost_vis'] )  ? '1' : '';
+            $output['ev_currency_symbol']  = sanitize_text_field( $input['ev_currency_symbol']  ?? '£' );
+            $output['ev_miles_per_kwh']         = floatval( $input['ev_miles_per_kwh']           ?? 3.5 );
+            $output['ev_session_expected_hours'] = floatval( $input['ev_session_expected_hours'] ?? 4.0 );
+            $output['ev_co2_factor']             = floatval( $input['ev_co2_factor']             ?? 0.5 );
+        }
     }
     $output['custom_entities'] = ! empty( $input['custom_entities'] ) && is_array( $input['custom_entities'] ) ? array_map( function( $item ) {
         return [
@@ -324,6 +340,9 @@ function ha_powerflow_settings_page() {
                 <button type="button" class="ha-pf-tab-btn" data-tab="appearance">🎨 Appearance</button>
                 <button type="button" class="ha-pf-tab-btn" data-tab="modules">🧩 Modules</button>
                 <button type="button" class="ha-pf-tab-btn" data-tab="maintenance">⚙️ Maintenance</button>
+                <?php if ( ! empty( $o['enable_ev'] ) ) : ?>
+                <button type="button" class="ha-pf-tab-btn" data-tab="ev-history">⚡ EV History</button>
+                <?php endif; ?>
             </nav>
 
             <!-- ── Tabs ────────────────────────────────────────────────── -->
@@ -333,6 +352,7 @@ function ha_powerflow_settings_page() {
             include HA_POWERFLOW_DIR . 'admin/partials/tab-appearance.php';
             include HA_POWERFLOW_DIR . 'admin/partials/tab-modules.php';
             include HA_POWERFLOW_DIR . 'admin/partials/tab-maintenance.php';
+            include HA_POWERFLOW_DIR . 'admin/partials/tab-ev-history.php';
             ?>
 
             <div class="ha-pf-sticky-save-bar">

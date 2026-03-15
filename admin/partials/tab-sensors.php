@@ -27,6 +27,64 @@
                 <div class="ha-pf-columns" style="margin-top:32px;">
                     <div class="ha-pf-col ha-pf-col-full">
                         <div class="ha-pf-card">
+                            <h2>⚙️ Defaults</h2>
+                            <table class="form-table form-table-sm" role="presentation">
+                                <tr>
+                                    <th scope="row"><label for="ha-pf-currency-symbol">Currency Symbol</label></th>
+                                    <td>
+                                        <input type="text"
+                                               id="ha-pf-currency-symbol"
+                                               name="ha_powerflow_options[ev_currency_symbol]"
+                                               value="<?php echo esc_attr( $o['ev_currency_symbol'] ?? '£' ); ?>"
+                                               style="width:60px;text-align:center;"
+                                               maxlength="3"
+                                               placeholder="£" />
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="ha-pf-miles-per-kwh">EV Efficiency (miles per kWh)</label></th>
+                                    <td>
+                                        <input type="number"
+                                               id="ha-pf-miles-per-kwh"
+                                               name="ha_powerflow_options[ev_miles_per_kwh]"
+                                               value="<?php echo esc_attr( $o['ev_miles_per_kwh'] ?? '3.5' ); ?>"
+                                               step="0.1" min="1" max="10"
+                                               style="width:80px;" />
+                                        <span class="description"> miles/kWh &nbsp;(used to estimate range added per session)</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="ha-pf-session-hours">Expected Session Length (hours)</label></th>
+                                    <td>
+                                        <input type="number"
+                                               id="ha-pf-session-hours"
+                                               name="ha_powerflow_options[ev_session_expected_hours]"
+                                               value="<?php echo esc_attr( $o['ev_session_expected_hours'] ?? '4' ); ?>"
+                                               step="0.5" min="0.5" max="24"
+                                               style="width:80px;" />
+                                        <span class="description"> hours &nbsp;(used for the session progress bar)</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="ha-pf-co2-factor">CO₂ Saved Factor (kg per kWh)</label></th>
+                                    <td>
+                                        <input type="number"
+                                               id="ha-pf-co2-factor"
+                                               name="ha_powerflow_options[ev_co2_factor]"
+                                               value="<?php echo esc_attr( $o['ev_co2_factor'] ?? '0.5' ); ?>"
+                                               step="0.01" min="0.01" max="5"
+                                               style="width:80px;" />
+                                        <span class="description"> kg CO₂ &nbsp;(saving vs petrol equivalent — UK average ≈ 0.5)</span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ha-pf-columns" style="margin-top:32px;">
+                    <div class="ha-pf-col ha-pf-col-full">
+                        <div class="ha-pf-card">
                             <h2>✨ Additional HUD Entities</h2>
                             <p class="description">Add extra sensors to your HUD. They will inherit Title and Power text colors.</p>
                             

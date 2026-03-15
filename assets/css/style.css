@@ -42,7 +42,11 @@
 .ha-powerflow-widget text[id$="-energy-out"],
 .ha-powerflow-widget text[id$="-soc"],
 .ha-powerflow-widget text[id$="-efficiency"],
-.ha-powerflow-widget text[id*="-price-"] { 
+.ha-powerflow-widget text[id*="-price-"],
+.ha-powerflow-widget #ha-pf-ev-charge-added,
+.ha-powerflow-widget #ha-pf-ev-plug-status,
+.ha-powerflow-widget #ha-pf-ev-charge-mode,
+.ha-powerflow-widget #ha-pf-ev-charger-cost { 
     fill: var(--ha-pf-energy-color, #6677aa); 
 }
 

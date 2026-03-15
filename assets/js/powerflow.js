@@ -14,6 +14,7 @@
 
     function isModOn(key) {
         if (!isPreview) {
+            if (key === 'weather') return haPowerflow.enableWeather === 'true';
             return (haPowerflow.modules && haPowerflow.modules[key] && haPowerflow.modules[key].enabled === 'true');
         }
         return $('#ha-pf-toggle-' + key).is(':checked');
@@ -614,6 +615,10 @@
             battery_soc: { state: '85', unit: '%' },
             ev_power: { state: '2100', unit: 'W' },
             ev_soc: { state: '42', unit: '%' },
+            ev_charge_added: { state: '12.4', unit: 'kWh' },
+            ev_plug_status: { state: 'Connected', unit: '' },
+            ev_charge_mode: { state: 'Smart', unit: '' },
+            ev_charger_cost: { state: '2.86', unit: '' },
             heatpump_power: { state: '1650', unit: 'W' },
             heatpump_efficiency: { state: '3.4', unit: '' },
             weather: { state: 'sunny', unit: '' }
@@ -725,6 +730,37 @@
             svgText('ha-pf-ev-soc', isNaN(evSocVal) ? 'N/A' : evSocVal.toFixed(0) + '\u202f%');
         }
 
+        // ── EV extra fields ────────────────────────────────────────────────
+        if (hasEv) {
+            var evMod = (haPowerflow.modules && haPowerflow.modules.ev) ? haPowerflow.modules.ev : {};
+            var currency = evMod.currencySymbol || '\u00a3';
+
+            var evExtraFields = [
+                { el: $widget.find('#ha-pf-ev-charge-added')[0], vis: evMod.chargeAddedVis, key: 'ev_charge_added',
+                  fmt: function(s) { var v = parseFloat(s); return isNaN(v) ? s : v.toFixed(1) + '\u202fkWh'; } },
+                { el: $widget.find('#ha-pf-ev-plug-status')[0],  vis: evMod.plugStatusVis,  key: 'ev_plug_status',
+                  fmt: function(s) { return s; } },
+                { el: $widget.find('#ha-pf-ev-charge-mode')[0],  vis: evMod.chargeModeVis,  key: 'ev_charge_mode',
+                  fmt: function(s) { return s; } },
+                { el: $widget.find('#ha-pf-ev-charger-cost')[0], vis: evMod.chargerCostVis, key: 'ev_charger_cost',
+                  fmt: function(s) { var v = parseFloat(s); return isNaN(v) ? s : currency + v.toFixed(2); } }
+            ];
+
+            evExtraFields.forEach(function(field) {
+                if (!field.el) return;
+                // Apply visibility: hide when explicitly set to 'false', show otherwise
+                field.el.style.display = (field.vis === 'false') ? 'none' : '';
+                if (field.vis === 'false') return;
+                // Populate content
+                var entry = d[field.key];
+                if (entry && entry.state && entry.state !== 'N/A') {
+                    field.el.textContent = field.fmt(entry.state);
+                } else {
+                    field.el.textContent = '\u2014';
+                }
+            });
+        }
+
         var hpPowerVal = NaN;
         if (hasHP && d.heatpump_power) {
             hpPowerVal = parseFloat(d.heatpump_power.state);
@@ -755,7 +791,44 @@
             heatpump: hpPowerVal,
         });
 
-        // Update custom entities
+        // ── EV Session logging ─────────────────────────────────────────────
+        if (hasEv && !isPreview && haPowerflow.sessionLogUrl) {
+            var plugRaw      = (d.ev_plug_status  && d.ev_plug_status.state)  ? d.ev_plug_status.state  : '';
+            var chargeAdded  = (d.ev_charge_added && d.ev_charge_added.state !== 'N/A') ? d.ev_charge_added.state : '0';
+            var costRate     = (d.ev_charger_cost  && d.ev_charger_cost.state !== 'N/A') ? d.ev_charger_cost.state : '0';
+            var evPowerLog   = isNaN(evPowerVal) ? 0 : evPowerVal;
+
+            // Filter out HA sensor non-values — these must never start or end a session
+            var invalidStates = ['n/a', 'unavailable', 'unknown', 'none', ''];
+            var plugStatus = invalidStates.indexOf(plugRaw.toLowerCase()) === -1 ? plugRaw : '';
+
+            if (plugStatus) {
+                var pvPowerNow = NaN;
+                if (isModOn('solar') && d.pv_power && d.pv_power.state !== 'N/A') {
+                    pvPowerNow = parseFloat(d.pv_power.state) || 0;
+                }
+                var chargeMode = (d.ev_charge_mode && d.ev_charge_mode.state !== 'N/A') ? d.ev_charge_mode.state : '';
+
+                $.ajax({
+                    url:         haPowerflow.sessionLogUrl,
+                    method:      'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        plug_status:  plugStatus,
+                        charge_added: parseFloat(chargeAdded) || 0,
+                        cost_rate:    parseFloat(costRate)    || 0,
+                        ev_power:     evPowerLog,
+                        solar_kw:     isNaN(pvPowerNow) ? 0 : Math.round(pvPowerNow),
+                        charge_mode:  chargeMode
+                    }),
+                    error: function(xhr) {
+                        if (debugMode) {
+                            console.warn('HA Powerflow: EV session log failed —', xhr.status, xhr.responseText);
+                        }
+                    }
+                });
+            }
+        }
         if (haPowerflow.customEntities && haPowerflow.customEntities.length) {
             haPowerflow.customEntities.forEach(function(item, index) {
                 var entry = d['custom_' + index];

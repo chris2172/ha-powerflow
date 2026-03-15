@@ -36,6 +36,42 @@
                                         if ( ! empty($m['has_eff']) ) {
                                             ha_pf_entity( $o, $id_prefix . '_efficiency', 'Efficiency (COP)', 'sensor.' . $id_prefix . '_cop' );
                                         }
+
+                                        // ── EV-specific extra fields ───────────────────────────────
+                                        if ( $id === 'ev' ) :
+                                            $ev_fields = [
+                                                'ev_charge_added' => [ 'label' => 'Charge Added',    'placeholder' => 'sensor.ev_charge_added',  'vis_key' => 'ev_charge_added_vis'  ],
+                                                'ev_plug_status'  => [ 'label' => 'Plug Status',     'placeholder' => 'sensor.ev_plug_status',   'vis_key' => 'ev_plug_status_vis'   ],
+                                                'ev_charge_mode'  => [ 'label' => 'Charge Mode',     'placeholder' => 'sensor.ev_charge_mode',   'vis_key' => 'ev_charge_mode_vis'   ],
+                                                'ev_charger_cost' => [ 'label' => 'Co Charger Cost', 'placeholder' => 'sensor.ev_charger_cost',  'vis_key' => 'ev_charger_cost_vis'  ],
+                                            ];
+                                            foreach ( $ev_fields as $ef_key => $ef ) : ?>
+                                            <tr>
+                                                <th scope="row" style="padding-top:8px;">
+                                                    <label><?php echo esc_html( $ef['label'] ); ?></label>
+                                                </th>
+                                                <td style="padding-top:8px;">
+                                                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                                                        <input type="text"
+                                                               name="ha_powerflow_options[<?php echo esc_attr( $ef_key ); ?>]"
+                                                               value="<?php echo esc_attr( $o[ $ef_key ] ?? '' ); ?>"
+                                                               class="regular-text"
+                                                               placeholder="<?php echo esc_attr( $ef['placeholder'] ); ?>" />
+                                                        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer;">
+                                                            <label class="ha-pf-toggle-label ha-pf-toggle-sm" style="margin:0;">
+                                                                <input type="checkbox"
+                                                                       name="ha_powerflow_options[<?php echo esc_attr( $ef['vis_key'] ); ?>]"
+                                                                       value="1"
+                                                                       <?php checked( ! empty( $o[ $ef['vis_key'] ] ) ); ?> />
+                                                                <span class="ha-pf-slider"></span>
+                                                            </label>
+                                                            <span>Visible</span>
+                                                        </label>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            <?php endforeach;
+                                        endif;
                                         ?>
                                         <tr id="ha-pf-<?php echo $id_prefix; ?>-line-row">
                                             <th>Path</th>

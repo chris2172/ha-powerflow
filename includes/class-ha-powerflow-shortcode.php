@@ -108,6 +108,7 @@ class HA_Powerflow_Shortcode {
             'gridMaxCapacity'  => (int) ( $o['grid_max_capacity'] ?? 10000 ),
             'houseMaxCapacity' => (int) ( $o['house_max_capacity'] ?? 8000 ),
             'swUrl'            => HA_POWERFLOW_URL . 'assets/sw.js',
+            'sessionLogUrl'    => esc_url_raw( rest_url( 'ha-powerflow/v1/ev-session' ) ),
             'modules'          => []
         ];
 
@@ -139,6 +140,21 @@ class HA_Powerflow_Shortcode {
             if ( $key === 'battery' ) {
                 $localized_data['modules'][$key]['energyIn'] = $o['battery_in_energy'] ?? '';
                 $localized_data['modules'][$key]['energyOut'] = $o['battery_out_energy'] ?? '';
+            }
+
+            // EV extra fields
+            if ( $key === 'ev' ) {
+                // Vis defaults to 'true' (visible) when the option has never been saved;
+                // only becomes 'false' after an admin explicitly unchecks the toggle and saves.
+                $localized_data['modules'][$key]['chargeAdded']    = $o['ev_charge_added']  ?? '';
+                $localized_data['modules'][$key]['chargeAddedVis'] = isset( $o['ev_charge_added_vis'] )  ? ( $o['ev_charge_added_vis']  ? 'true' : 'false' ) : 'true';
+                $localized_data['modules'][$key]['plugStatus']     = $o['ev_plug_status']   ?? '';
+                $localized_data['modules'][$key]['plugStatusVis']  = isset( $o['ev_plug_status_vis'] )   ? ( $o['ev_plug_status_vis']   ? 'true' : 'false' ) : 'true';
+                $localized_data['modules'][$key]['chargeMode']     = $o['ev_charge_mode']   ?? '';
+                $localized_data['modules'][$key]['chargeModeVis']  = isset( $o['ev_charge_mode_vis'] )   ? ( $o['ev_charge_mode_vis']   ? 'true' : 'false' ) : 'true';
+                $localized_data['modules'][$key]['chargerCost']    = $o['ev_charger_cost']  ?? '';
+                $localized_data['modules'][$key]['chargerCostVis'] = isset( $o['ev_charger_cost_vis'] )  ? ( $o['ev_charger_cost_vis']  ? 'true' : 'false' ) : 'true';
+                $localized_data['modules'][$key]['currencySymbol'] = $o['ev_currency_symbol'] ?? '£';
             }
 
             $css_vars .= " --ha-pf-{$prefix}-color: " . esc_attr($color) . ";";
@@ -344,6 +360,21 @@ class HA_Powerflow_Shortcode {
                                   font-family="'Exo 2', sans-serif" font-size="12"
                                   filter="url(#hapf-shadow)">—</text>
                         <?php endif; ?>
+                        <?php if ( $key === 'ev' ) :
+                            $ev_extras = [
+                                'charge-added' => 58,
+                                'plug-status'  => 71,
+                                'charge-mode'  => 84,
+                                'charger-cost' => 97,
+                            ];
+                            foreach ( $ev_extras as $slug => $y_off ) : ?>
+                            <text id="ha-pf-ev-<?php echo $slug; ?>"
+                                  x="<?php echo $m['x']; ?>" y="<?php echo $m['y'] + $y_off; ?>"
+                                  text-anchor="middle"
+                                  font-family="'Exo 2', sans-serif" font-size="11"
+                                  filter="url(#hapf-shadow)">—</text>
+                            <?php endforeach;
+                        endif; ?>
                     </g>
                     <?php endif;
                 endforeach; ?>

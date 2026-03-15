@@ -47,10 +47,12 @@ require_once HA_POWERFLOW_DIR . 'includes/class-ha-powerflow-modules.php';
 require_once HA_POWERFLOW_DIR . 'includes/class-ha-powerflow-shortcode.php';
 require_once HA_POWERFLOW_DIR . 'includes/class-ha-powerflow-manual-shortcode.php';
 require_once HA_POWERFLOW_DIR . 'includes/class-ha-powerflow-ajax.php';
+require_once HA_POWERFLOW_DIR . 'includes/class-ha-powerflow-ev-session.php';
 
 HA_Powerflow_Shortcode::init();
 HA_Powerflow_Manual_Shortcode::init();
 HA_Powerflow_Ajax::init();
+HA_Powerflow_EV_Session::init();
 
 // ── PWA Support ─────────────────────────────────────────────────────────────
 add_action( 'wp_head', 'ha_powerflow_pwa_headers' );

@@ -54,15 +54,33 @@
                     </div>
                     <div class="ha-pf-col ha-pf-col-right">
                         <div class="ha-pf-card">
-                            <h2>📡 Connection Diagnostics</h2>
-                            <div id="ha-pf-diag-panel" style="font-size:13px; line-height:1.6;">
-                                <p><strong>Status:</strong> <span id="ha-pf-diag-status">Checking...</span></p>
-                                <p><strong>Last Response:</strong> <span id="ha-pf-diag-time">—</span></p>
-                                <div id="ha-pf-diag-log" style="margin-top:10px; font-family:monospace; background:#1a202c; color:#a0aec0; padding:12px; border-radius:8px; height:150px; overflow-y:auto;">
+                            <h2>📡 Connection Health</h2>
+                            <div id="ha-pf-health-dashboard">
+                                <div class="ha-pf-health-hero">
+                                    <div id="ha-pf-health-status" class="ha-pf-health-status healthy">Checking...</div>
+                                    <div class="ha-pf-health-label">System Connectivity</div>
+                                </div>
+                                
+                                <div class="ha-pf-health-metrics">
+                                    <div class="ha-pf-health-metric">
+                                        <span class="label">Latency</span>
+                                        <span id="ha-pf-health-latency" class="value">0ms</span>
+                                    </div>
+                                    <div class="ha-pf-health-metric">
+                                        <span class="label">Last Sync</span>
+                                        <span id="ha-pf-health-last-sync" class="value">—</span>
+                                    </div>
+                                </div>
+
+                                <div id="ha-pf-diag-log" style="margin-top:10px; font-family:monospace; background:#1a202c; color:#a0aec0; padding:12px; border-radius:8px; height:120px; overflow-y:auto; font-size:11px;">
                                     [System Ready]
                                 </div>
+
+                                <div class="ha-pf-health-footer">
+                                    <span>Polling every 30s</span>
+                                    <button type="button" id="ha-pf-diag-refresh" class="button button-small">Re-Sync Now</button>
+                                </div>
                             </div>
-                            <button type="button" id="ha-pf-diag-refresh" class="button" style="margin-top:10px;">Refresh Diagnostics</button>
                         </div>
                     </div>
                 </div>

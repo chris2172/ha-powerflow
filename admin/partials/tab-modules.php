@@ -73,7 +73,23 @@
                                             <?php endforeach;
                                         endif;
                                         ?>
-                                        <tr id="ha-pf-<?php echo $id_prefix; ?>-line-row">
+                                         <?php if ( $id === 'solar' ) : ?>
+                                            <tr>
+                                                <th scope="row"><label for="ha-pf-solar-show-forecast">Show Forecast Comparison</label></th>
+                                                <td>
+                                                    <label class="ha-pf-toggle-label ha-pf-toggle-sm">
+                                                        <input type="checkbox"
+                                                               id="ha-pf-solar-show-forecast"
+                                                               name="ha_powerflow_options[solar_show_forecast]"
+                                                               value="1" <?php checked( ! empty( $o['solar_forecast_vis'] ) ); ?>/>
+                                                        <span class="ha-pf-slider"></span>
+                                                    </label>
+                                                    <span class="description"> Requires 'Energy Today' and 'Solar Forecast Entity' sensors.</span>
+                                                </td>
+                                            </tr>
+                                         <?php endif; ?>
+
+                                         <tr id="ha-pf-<?php echo $id_prefix; ?>-line-row">
                                             <th>Path</th>
                                             <td><input type="text" name="ha_powerflow_options[<?php echo $id_prefix; ?>_line]" value="<?php echo esc_attr( $o[$id_prefix . '_line'] ?? '' ); ?>" class="widefat" placeholder="SVG Path..."/></td>
                                         </tr>

@@ -4,12 +4,18 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class HA_Powerflow_EV_Session {
 
     const OPTION_KEY          = 'ha_pf_ev_sessions';
-    const CUSTOMERS_OPTION    = 'ha_pf_ev_customers';
-    const CO_CHARGER_SURCHARGE = 0.12; // 12% Co Charger app fee
     const MAX_SESSIONS        = 50;
     const MAX_POINTS          = 2880; // 24h at 30s intervals
 
     public static function init() {
+        // Ensure tables exist on init for already active users
+        if ( ! get_option( 'ha_pf_ev_db_created' ) ) {
+            if ( function_exists( 'ha_pf_create_tables' ) ) {
+                ha_pf_create_tables();
+                update_option( 'ha_pf_ev_db_created', true );
+            }
+        }
+
         add_action( 'rest_api_init',      [ __CLASS__, 'register_rest_routes' ] );
         add_shortcode( 'ev_charge_summary', [ __CLASS__, 'render_shortcode' ] );
         add_action( 'wp_enqueue_scripts',  [ __CLASS__, 'register_assets' ] );
@@ -17,8 +23,59 @@ class HA_Powerflow_EV_Session {
         add_action( 'wp_ajax_ha_pf_clear_ev_history',    [ __CLASS__, 'ajax_clear_history' ] );
         add_action( 'wp_ajax_ha_pf_toggle_payment',      [ __CLASS__, 'ajax_toggle_payment' ] );
         add_action( 'wp_ajax_ha_pf_assign_customer',     [ __CLASS__, 'ajax_assign_customer' ] );
-        add_action( 'wp_ajax_ha_pf_save_customer',       [ __CLASS__, 'ajax_save_customer' ] );
-        add_action( 'wp_ajax_ha_pf_delete_customer',     [ __CLASS__, 'ajax_delete_customer' ] );
+
+        // Run migration if needed
+        add_action( 'admin_init', [ __CLASS__, 'maybe_migrate_data' ] );
+    }
+
+    public static function maybe_migrate_data() {
+        if ( ! current_user_can( 'manage_options' ) ) return;
+        
+        $migrated = get_option( 'ha_pf_ev_migrated', false );
+        if ( $migrated ) return;
+
+        // Ensure tables exist before migrating
+        if ( function_exists( 'ha_pf_create_tables' ) ) {
+            ha_pf_create_tables();
+        }
+        $sessions_option = get_option( self::OPTION_KEY, [] );
+        
+        if ( ! empty( $sessions_option ) && is_array( $sessions_option ) ) {
+            foreach ( $sessions_option as $s ) {
+                $session_id = $s['id'] ?? ( 'sess_' . ( $s['start_ts'] ?? time() ) );
+                
+                // Insert session
+                $wpdb->insert( HA_POWERFLOW_TABLE_SESSIONS, [
+                    'id'               => $session_id,
+                    'start_ts'         => $s['start_ts'] ?? time(),
+                    'end_ts'           => $s['end_ts']   ?? null,
+                    'status'           => $s['status']   ?? 'completed',
+                    'currency'         => $s['currency'] ?? '£',
+                    'cost_rate'        => $s['cost_rate'] ?? 0,
+                    'last_mode'        => $s['last_mode'] ?? '',
+                    'customer_id'      => $s['customer_id'] ?? null,
+                    'payment_received' => ! empty( $s['payment_received'] ) ? 1 : 0
+                ] );
+
+                // Insert data points
+                if ( ! empty( $s['data_points'] ) && is_array( $s['data_points'] ) ) {
+                    foreach ( $s['data_points'] as $p ) {
+                        $wpdb->insert( HA_POWERFLOW_TABLE_POINTS, [
+                            'session_id' => $session_id,
+                            'ts'         => $p['ts']    ?? time(),
+                            'kwh'        => $p['kwh']   ?? 0,
+                            'power'      => $p['power'] ?? 0,
+                            'solar'      => $p['solar'] ?? 0
+                        ] );
+                    }
+                }
+            }
+            // Clear the old option to save space, but keep it for a while just in case? 
+            // Better to delete it if we are confident.
+            // delete_option( self::OPTION_KEY );
+        }
+        
+        update_option( 'ha_pf_ev_migrated', true );
     }
 
     public static function register_assets() {
@@ -79,80 +136,188 @@ class HA_Powerflow_EV_Session {
             return rest_ensure_response( [ 'status' => 'ignored' ] );
         }
 
-        $sessions = get_option( self::OPTION_KEY, [] );
-        if ( ! is_array( $sessions ) ) $sessions = [];
-
-        // A session ends ONLY on "disconnected" — any other status
-        // (Charging, Eco+, Boost, Waiting, etc.) continues the same session.
+        global $wpdb;
         $disconnected = ( stripos( $plug_status, 'disconnected' ) !== false );
 
-        // Find the currently active session index
-        $active_idx = null;
-        foreach ( $sessions as $i => $s ) {
-            if ( isset( $s['status'] ) && $s['status'] === 'active' ) {
-                $active_idx = $i;
-                break;
-            }
-        }
+        // Find the currently active session
+        $active = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM " . HA_POWERFLOW_TABLE_SESSIONS . " WHERE status = %s LIMIT 1",
+            'active'
+        ), ARRAY_A );
 
         // ── EV Disconnected → end active session ───────────────────────────
         if ( $disconnected ) {
-            if ( $active_idx !== null ) {
-                $sessions[ $active_idx ]['status'] = 'completed';
-                $sessions[ $active_idx ]['end_ts'] = $now;
-                update_option( self::OPTION_KEY, $sessions, false );
+            if ( $active ) {
+                $wpdb->update( HA_POWERFLOW_TABLE_SESSIONS, 
+                    [ 'status' => 'completed', 'end_ts' => $now ], 
+                    [ 'id' => $active['id'] ] 
+                );
                 return rest_ensure_response( [ 'status' => 'session_ended' ] );
             }
             return rest_ensure_response( [ 'status' => 'idle' ] );
         }
 
         // ── Connected / Charging → log data point ──────────────────────────
-        if ( $active_idx === null ) {
+        $session_id = $active ? $active['id'] : null;
+
+        if ( ! $session_id ) {
             // Start a brand new session
             $o        = get_option( 'ha_powerflow_options', [] );
             $currency = $o['ev_currency_symbol'] ?? '£';
+            $session_id = 'sess_' . $now;
+            
+            // Auto-assign user from active booking
+            $user_id = self::get_active_booking_user_id( $now );
 
-            $new = [
-                'id'          => 'sess_' . $now,
+            $wpdb->insert( HA_POWERFLOW_TABLE_SESSIONS, [
+                'id'          => $session_id,
                 'start_ts'    => $now,
-                'end_ts'      => null,
                 'status'      => 'active',
                 'currency'    => sanitize_text_field( $currency ),
                 'cost_rate'   => $cost_rate,
-                'data_points' => [],
-            ];
-            array_unshift( $sessions, $new );
-            $active_idx = 0;
+                'customer_id' => $user_id
+            ] );
 
-            // Enforce max session count
-            if ( count( $sessions ) > self::MAX_SESSIONS ) {
-                $sessions = array_slice( $sessions, 0, self::MAX_SESSIONS );
+            // Enforce max session count (optional, but good to keep DB size in check)
+            $session_count = $wpdb->get_var( "SELECT COUNT(*) FROM " . HA_POWERFLOW_TABLE_SESSIONS );
+            if ( $session_count > self::MAX_SESSIONS ) {
+                $to_delete = $wpdb->get_col( $wpdb->prepare(
+                    "SELECT id FROM " . HA_POWERFLOW_TABLE_SESSIONS . " WHERE status != %s ORDER BY start_ts ASC LIMIT %d",
+                    'active',
+                    $session_count - self::MAX_SESSIONS
+                ) );
+                if ( ! empty( $to_delete ) ) {
+                    $placeholders = implode( ',', array_fill( 0, count( $to_delete ), '%s' ) );
+                    $wpdb->query( $wpdb->prepare( "DELETE FROM " . HA_POWERFLOW_TABLE_SESSIONS . " WHERE id IN ($placeholders)", $to_delete ) );
+                    $wpdb->query( $wpdb->prepare( "DELETE FROM " . HA_POWERFLOW_TABLE_POINTS . " WHERE session_id IN ($placeholders)", $to_delete ) );
+                }
             }
         }
 
         // Add data point (guard against unbounded growth)
-        if ( count( $sessions[ $active_idx ]['data_points'] ) < self::MAX_POINTS ) {
-            $sessions[ $active_idx ]['data_points'][] = [
-                'ts'     => $now,
-                'kwh'    => round( $charge_added, 3 ),
-                'power'  => round( $ev_power ),
-                'solar'  => round( $solar_kw ),
-            ];
+        $point_count = $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM " . HA_POWERFLOW_TABLE_POINTS . " WHERE session_id = %s",
+            $session_id
+        ) );
+
+        if ( $point_count < self::MAX_POINTS ) {
+            $wpdb->insert( HA_POWERFLOW_TABLE_POINTS, [
+                'session_id' => $session_id,
+                'ts'         => $now,
+                'kwh'        => round( $charge_added, 3 ),
+                'power'      => round( $ev_power ),
+                'solar'      => round( $solar_kw )
+            ] );
         }
 
-        // Keep cost_rate and last known charge mode current
-        if ( $cost_rate > 0 ) {
-            $sessions[ $active_idx ]['cost_rate'] = $cost_rate;
+        // Update session meta if changed
+        $update_meta = [];
+        if ( $cost_rate > 0 && ( ! $active || $active['cost_rate'] != $cost_rate ) ) {
+            $update_meta['cost_rate'] = $cost_rate;
         }
-        if ( $charge_mode !== '' ) {
-            $sessions[ $active_idx ]['last_mode'] = $charge_mode;
+        if ( $charge_mode !== '' && ( ! $active || $active['last_mode'] !== $charge_mode ) ) {
+            $update_meta['last_mode'] = $charge_mode;
+        }
+        if ( ! empty( $update_meta ) ) {
+            $wpdb->update( HA_POWERFLOW_TABLE_SESSIONS, $update_meta, [ 'id' => $session_id ] );
         }
 
-        update_option( self::OPTION_KEY, $sessions, false );
         return rest_ensure_response( [
             'status' => 'logged',
-            'points' => count( $sessions[ $active_idx ]['data_points'] ),
+            'points' => (int) $point_count + 1
         ] );
+    }
+
+    /**
+     * Helper to get the markup percentage for a given base rate.
+     */
+    public static function get_markup_pct_for_rate( $rate, $o ) {
+        $ranges = $o['ev_booking_markup_ranges'] ?? [];
+        if ( empty( $ranges ) ) return 0;
+        
+        $rate = floatval( $rate );
+        foreach ( $ranges as $r ) {
+            $min = floatval( $r['min'] ?? 0 );
+            $max = floatval( $r['max'] ?? 0 );
+            if ( $rate >= $min && $rate <= $max ) {
+                return floatval( $r['pct'] ?? 0 );
+            }
+        }
+        return 0;
+    }
+
+    public static function is_time_in_range( $time, $start, $end ) {
+        if ( $start <= $end ) {
+            return ( $time >= $start && $time <= $end );
+        } else {
+            return ( $time >= $start || $time <= $end );
+        }
+    }
+
+    public static function get_effective_rate( $base_rate, $o, $ts = null ) {
+        if ( empty( $o['ev_booking_intel_mode'] ) ) return floatval( $base_rate );
+        
+        $check_ts = $ts ?: time();
+        $time_str = date( 'H:i', $check_ts );
+        $offpeak_start = $o['ev_booking_offpeak_start'] ?? '23:30';
+        $offpeak_end   = $o['ev_booking_offpeak_end']   ?? '05:30';
+        
+        if ( self::is_time_in_range( $time_str, $offpeak_start, $offpeak_end ) ) {
+            return floatval( $base_rate );
+        }
+        
+    // Outside off-peak window -> use peak price
+        return floatval( $o['ev_booking_peak_price'] ?? $base_rate );
+    }
+
+    public static function calculate_session_cost( $pts, $session_base_rate, $o ) {
+        if ( empty( $pts ) ) return 0;
+        $total_cost = 0;
+        $last_kwh = null;
+        
+        foreach ( $pts as $p ) {
+            $cur_kwh = floatval( $p['kwh'] ?? 0 );
+            if ( $last_kwh === null ) {
+                $last_kwh = $cur_kwh;
+                continue;
+            }
+            
+            $diff = $cur_kwh - $last_kwh;
+            if ( $diff > 0 ) {
+                $rate = self::get_effective_rate( $session_base_rate, $o, $p['ts'] );
+                $markup = self::get_markup_pct_for_rate( $rate, $o );
+                $total_cost += $diff * $rate * ( 1 + ( $markup / 100 ) );
+            }
+            $last_kwh = $cur_kwh;
+        }
+        return round( $total_cost, 2 );
+    }
+
+    /**
+     * Helper to get the current grid price from the configured HA sensor.
+     */
+    public static function get_current_cost_rate( $o ) {
+        $sensor = $o['grid_price_in'] ?? '';
+        if ( ! $sensor ) return 0;
+
+        $ha_url   = isset( $o['ha_url'] )   ? rtrim( $o['ha_url'], '/' ) : '';
+        $ha_token = isset( $o['ha_token'] ) ? $o['ha_token']             : '';
+        if ( ! $ha_url || ! $ha_token ) return 0;
+
+        $response = wp_remote_get( $ha_url . '/api/states/' . $sensor, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $ha_token,
+                'Content-Type'  => 'application/json',
+            ],
+            'timeout' => 5
+        ] );
+
+        if ( is_wp_error( $response ) ) return 0;
+
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        $val  = $body['state'] ?? 0;
+
+        return is_numeric( $val ) ? floatval( $val ) : 0;
     }
 
     // ── Shortcode [ev_charge_summary] ───────────────────────────────────────
@@ -165,17 +330,19 @@ class HA_Powerflow_EV_Session {
         wp_enqueue_script( 'ha-pf-chartjs' );
         wp_enqueue_script( 'ha-pf-ev-session' );
 
-        $sessions = get_option( self::OPTION_KEY, [] );
-        if ( ! is_array( $sessions ) ) $sessions = [];
+        global $wpdb;
+        $active = $wpdb->get_row( "SELECT * FROM " . HA_POWERFLOW_TABLE_SESSIONS . " WHERE status = 'active' LIMIT 1", ARRAY_A );
+        $history = $wpdb->get_results( "SELECT * FROM " . HA_POWERFLOW_TABLE_SESSIONS . " WHERE status != 'active' ORDER BY start_ts DESC", ARRAY_A );
 
-        // Separate active from historical
-        $active    = null;
-        $history   = [];
-        foreach ( $sessions as $s ) {
-            if ( $s['status'] === 'active' ) {
-                $active = $s;
-            } else {
-                $history[] = $s;
+        if ( $active ) {
+            $active['data_points'] = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM " . HA_POWERFLOW_TABLE_POINTS . " WHERE session_id = %s ORDER BY ts ASC", $active['id'] ), ARRAY_A );
+        }
+        foreach ( $history as &$s ) {
+            // Load data points only for the first history session (previous session)
+            // The others in the list will load them via AJAX or we can thin them here if needed.
+            // For now, let's load all for the first one.
+            if ( ! empty( $history[0] ) && $s['id'] === $history[0]['id'] ) {
+                 $s['data_points'] = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM " . HA_POWERFLOW_TABLE_POINTS . " WHERE session_id = %s ORDER BY ts ASC", $s['id'] ), ARRAY_A );
             }
         }
 
@@ -199,6 +366,9 @@ class HA_Powerflow_EV_Session {
             'miles_per_kwh'    => floatval( $o['ev_miles_per_kwh']           ?? 3.5 ),
             'expected_hours'   => floatval( $o['ev_session_expected_hours']  ?? 4.0 ),
             'co2_factor'       => floatval( $o['ev_co2_factor']              ?? 0.5 ),
+            'battery_min_discharge' => floatval( $o['battery_min_discharge'] ?? 10 ),
+            'battery_capacity_kwh'  => floatval( $o['battery_capacity_kwh']  ?? 13.5 ),
+            'options'               => $o,
         ];
 
         ob_start();
@@ -262,7 +432,13 @@ class HA_Powerflow_EV_Session {
     private static function render_session_card( $session, $chart_idx, $featured, $config = [] ) {
         $pts      = $session['data_points'] ?? [];
         $currency = esc_html( $config['currency']  ?? ( $session['currency'] ?? '£' ) );
-        $rate     = floatval( $session['cost_rate'] ?? 0 );
+        $o        = $config['options'] ?? get_option( 'ha_powerflow_options', [] );
+        
+        $base_rate    = floatval( $session['cost_rate'] ?? 0 );
+        $effective_rate = self::get_effective_rate( $base_rate, $o, $session['start_ts'] ?? null );
+        $markup_pct   = self::get_markup_pct_for_rate( $effective_rate, $o );
+        
+        $display_rate = $effective_rate * ( 1 + ( $markup_pct / 100 ) );
         $start_ts = intval( $session['start_ts'] ?? 0 );
         $end_ts   = isset( $session['end_ts'] ) ? intval( $session['end_ts'] ) : null;
         $active   = $session['status'] === 'active';
@@ -283,7 +459,7 @@ class HA_Powerflow_EV_Session {
             if ( isset( $p['solar'] ) && $p['solar'] > 0 ) $solar_w[] = $p['solar'];
         }
         $total_kwh  = round( $max_kwh, 2 );
-        $total_cost = $rate > 0 ? round( $total_kwh * $rate, 2 ) : null;
+        $total_cost = self::calculate_session_cost( $pts, $base_rate, $o );
         $peak_kw    = ! empty( $powers ) ? round( max( $powers ) / 1000, 2 ) : null;
         $avg_kw     = ! empty( $powers ) ? round( ( array_sum( $powers ) / count( $powers ) ) / 1000, 2 ) : null;
 
@@ -299,8 +475,8 @@ class HA_Powerflow_EV_Session {
             $latest_power_w = $last_pt['power'] ?? 0;
         }
         $current_kw       = round( $latest_power_w / 1000, 2 );
-        $cost_per_hour    = ( $rate > 0 && $latest_power_w > 0 )
-                            ? round( ( $latest_power_w / 1000 ) * $rate, 2 ) : null;
+        $cost_per_hour    = ( $display_rate > 0 && $latest_power_w > 0 )
+                            ? round( ( $latest_power_w / 1000 ) * $display_rate, 2 ) : null;
 
         // ── Energy this hour (rolling 60-min window) ──────────────────────
         $hour_ago    = $now - 3600;
@@ -320,7 +496,7 @@ class HA_Powerflow_EV_Session {
         if ( $active && $duration_hours > 0 && $duration_hours < $expected_hours && $total_kwh > 0 ) {
             $rate_kwh_per_hour = $total_kwh / $duration_hours;
             $projected_kwh     = round( $rate_kwh_per_hour * $expected_hours, 1 );
-            $projected_cost    = $rate > 0 ? round( $projected_kwh * $rate, 2 ) : null;
+            $projected_cost    = $display_rate > 0 ? round( $projected_kwh * $display_rate, 2 ) : null;
         }
 
         // ── Miles added ───────────────────────────────────────────────────
@@ -337,6 +513,39 @@ class HA_Powerflow_EV_Session {
             $avg_ev_w    = array_sum( $powers )  / count( $powers );
             if ( $avg_ev_w > 0 ) {
                 $solar_pct = round( min( 100, ( $avg_solar_w / $avg_ev_w ) * 100 ) );
+            }
+        }
+
+        // ── Battery Remaining Time (active only) ──────────────────────────
+        $battery_remaining_str = null;
+        if ( $active ) {
+            $bat_soc_eid   = $o['battery_soc']   ?? '';
+            $bat_power_eid = $o['battery_power'] ?? '';
+            
+            if ( $bat_soc_eid && $bat_power_eid ) {
+                $ha_data = HA_Powerflow_Ajax::fetch_ha_data([
+                    'soc'   => $bat_soc_eid,
+                    'power' => $bat_power_eid
+                ]);
+                
+                if ( ! is_wp_error( $ha_data ) ) {
+                    $curr_soc   = floatval( $ha_data['soc']['state']   ?? 0 );
+                    $curr_power = floatval( $ha_data['power']['state'] ?? 0 ); // positive = discharge, negative = charge
+                    
+                    $min_soc      = floatval( $o['battery_min_discharge'] ?? 10 );
+                    $capacity_kwh = floatval( $o['battery_capacity_kwh']  ?? 13.5 );
+                    
+                    if ( $curr_power < -100 && $curr_soc > $min_soc ) {
+                        // Usable energy in kWh
+                        $usable_kwh = ( ( $curr_soc - $min_soc ) / 100 ) * $capacity_kwh;
+                        // Discharge rate in kW
+                        $discharge_kw = abs( $curr_power ) / 1000;
+                        // Remaining hours
+                        $rem_hours = $usable_kwh / $discharge_kw;
+                        $rem_secs  = $rem_hours * 3600;
+                        $battery_remaining_str = self::format_duration( $rem_secs );
+                    }
+                }
             }
         }
 
@@ -381,6 +590,15 @@ class HA_Powerflow_EV_Session {
                     <span class="evcs-badge evcs-badge--done">Completed</span>
                     <?php endif; ?>
                 </div>
+
+                <?php if ( current_user_can( 'manage_options' ) && ! empty( $session['customer_id'] ) ) : 
+                    $u = get_userdata( $session['customer_id'] );
+                    if ( $u ) : ?>
+                    <div class="evcs-attributed-user">
+                        👤 Booked by: <strong><?php echo esc_html( $u->display_name ); ?></strong>
+                    </div>
+                <?php endif; endif; ?>
+
                 <?php if ( ! $featured ) : ?>
                 <span class="evcs-chevron">▾</span>
                 <?php endif; ?>
@@ -414,6 +632,12 @@ class HA_Powerflow_EV_Session {
                         <span class="evcs-live-stat-lbl">Last 60 Minutes</span>
                     </div>
                     <?php endif; ?>
+                    <?php if ( $battery_remaining_str ) : ?>
+                    <div class="evcs-live-stat evcs-live-stat--battery">
+                        <span class="evcs-live-stat-val"><?php echo esc_html( $battery_remaining_str ); ?></span>
+                        <span class="evcs-live-stat-lbl">Battery Remaining</span>
+                    </div>
+                    <?php endif; ?>
                 </div>
                 <?php endif; ?>
 
@@ -445,11 +669,6 @@ class HA_Powerflow_EV_Session {
                         <span class="evcs-stat-label">Total Cost</span>
                         <span class="evcs-stat-value evcs-stat-value--cost"><?php echo esc_html( $currency . number_format( $total_cost, 2 ) ); ?></span>
                     </div>
-                    <div class="evcs-stat evcs-stat--cocharger">
-                        <span class="evcs-stat-label">Co Charger Est. Cost</span>
-                        <span class="evcs-stat-value evcs-stat-value--cocharger"><?php echo esc_html( $currency . number_format( $total_cost * ( 1 + self::CO_CHARGER_SURCHARGE ), 2 ) ); ?></span>
-                        <span class="evcs-stat-footnote">incl. <?php echo esc_html( self::CO_CHARGER_SURCHARGE * 100 ); ?>% Co Charger app fee</span>
-                    </div>
                     <?php endif; ?>
                     <?php if ( $miles_added !== null && $miles_added > 0 ) : ?>
                     <div class="evcs-stat">
@@ -469,10 +688,11 @@ class HA_Powerflow_EV_Session {
                         <span class="evcs-stat-value"><?php echo esc_html( $peak_kw ); ?> kW</span>
                     </div>
                     <?php endif; ?>
-                    <?php if ( $rate > 0 ) : ?>
+                    <?php if ( $base_rate > 0 ) : ?>
                     <div class="evcs-stat">
                         <span class="evcs-stat-label">Rate per kWh</span>
-                        <span class="evcs-stat-value"><?php echo esc_html( $currency . number_format( $rate, 4 ) ); ?></span>
+                        <span class="evcs-stat-value"><?php echo esc_html( $currency . number_format( $display_rate, 4 ) ); ?></span>
+                        <span class="evcs-stat-footnote" style="font-size:10px; display:block; opacity:0.7;"><?php echo $markup_pct > 0 ? esc_html( $markup_pct . '% markup included' ) : 'No markup applied'; ?></span>
                     </div>
                     <?php endif; ?>
                     <?php if ( $projected_kwh !== null ) : ?>
@@ -558,15 +778,12 @@ class HA_Powerflow_EV_Session {
         check_ajax_referer( 'ha_pf_test_connection', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorised.' );
 
+        global $wpdb;
         $session_id = sanitize_text_field( $_POST['session_id'] ?? '' );
-        $sessions   = get_option( self::OPTION_KEY, [] );
-        if ( ! is_array( $sessions ) ) $sessions = [];
+        
+        $wpdb->delete( HA_POWERFLOW_TABLE_SESSIONS, [ 'id' => $session_id ] );
+        $wpdb->delete( HA_POWERFLOW_TABLE_POINTS,   [ 'session_id' => $session_id ] );
 
-        $sessions = array_values( array_filter( $sessions, function( $s ) use ( $session_id ) {
-            return ( $s['id'] ?? '' ) !== $session_id;
-        } ) );
-
-        update_option( self::OPTION_KEY, $sessions, false );
         wp_send_json_success( 'Session deleted.' );
     }
 
@@ -575,14 +792,12 @@ class HA_Powerflow_EV_Session {
         check_ajax_referer( 'ha_pf_test_connection', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorised.' );
 
-        $sessions = get_option( self::OPTION_KEY, [] );
-        if ( ! is_array( $sessions ) ) $sessions = [];
+        global $wpdb;
 
-        $active = array_values( array_filter( $sessions, function( $s ) {
-            return ( $s['status'] ?? '' ) === 'active';
-        } ) );
+        $wpdb->query( "DELETE FROM " . HA_POWERFLOW_TABLE_SESSIONS . " WHERE status != 'active'" );
+        // Delete points that don't belong to active sessions
+        $wpdb->query( "DELETE FROM " . HA_POWERFLOW_TABLE_POINTS . " WHERE session_id NOT IN (SELECT id FROM " . HA_POWERFLOW_TABLE_SESSIONS . " WHERE status = 'active')" );
 
-        update_option( self::OPTION_KEY, $active, false );
         wp_send_json_success( 'History cleared.' );
     }
 
@@ -591,18 +806,15 @@ class HA_Powerflow_EV_Session {
         check_ajax_referer( 'ha_pf_test_connection', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorised.' );
 
+        global $wpdb;
         $session_id = sanitize_text_field( $_POST['session_id'] ?? '' );
-        $sessions   = get_option( self::OPTION_KEY, [] );
-
-        foreach ( $sessions as &$s ) {
-            if ( ( $s['id'] ?? '' ) === $session_id ) {
-                $s['payment_received'] = empty( $s['payment_received'] ) ? true : false;
-                break;
-            }
-        }
-        unset( $s );
-        update_option( self::OPTION_KEY, $sessions, false );
-        wp_send_json_success( [ 'payment_received' => ! empty( $s['payment_received'] ) ] );
+        
+        $current = $wpdb->get_var( $wpdb->prepare( "SELECT payment_received FROM " . HA_POWERFLOW_TABLE_SESSIONS . " WHERE id = %s", $session_id ) );
+        $new_val = empty( $current ) ? 1 : 0;
+        
+        $wpdb->update( HA_POWERFLOW_TABLE_SESSIONS, [ 'payment_received' => $new_val ], [ 'id' => $session_id ] );
+        
+        wp_send_json_success( [ 'payment_received' => (bool)$new_val ] );
     }
 
     // ── Admin AJAX: assign customer to session ───────────────────────────────
@@ -610,75 +822,27 @@ class HA_Powerflow_EV_Session {
         check_ajax_referer( 'ha_pf_test_connection', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorised.' );
 
+        global $wpdb;
         $session_id  = sanitize_text_field( $_POST['session_id']  ?? '' );
         $customer_id = sanitize_text_field( $_POST['customer_id'] ?? '' );
-        $sessions    = get_option( self::OPTION_KEY, [] );
 
-        foreach ( $sessions as &$s ) {
-            if ( ( $s['id'] ?? '' ) === $session_id ) {
-                $s['customer_id'] = $customer_id;
-                break;
-            }
-        }
-        unset( $s );
-        update_option( self::OPTION_KEY, $sessions, false );
+        $wpdb->update( HA_POWERFLOW_TABLE_SESSIONS, [ 'customer_id' => $customer_id ], [ 'id' => $session_id ] );
+        
         wp_send_json_success( 'Customer assigned.' );
     }
 
-    // ── Admin AJAX: save (add/update) customer ───────────────────────────────
-    public static function ajax_save_customer() {
-        check_ajax_referer( 'ha_pf_test_connection', 'nonce' );
-        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorised.' );
-
-        $id    = sanitize_text_field( $_POST['customer_id'] ?? '' );
-        $name  = sanitize_text_field( $_POST['name']        ?? '' );
-        $email = sanitize_email(      $_POST['email']       ?? '' );
-        $notes = sanitize_textarea_field( $_POST['notes']   ?? '' );
-
-        if ( ! $name ) wp_send_json_error( 'Name is required.' );
-
-        $customers = get_option( self::CUSTOMERS_OPTION, [] );
-        if ( ! is_array( $customers ) ) $customers = [];
-
-        if ( $id ) {
-            // Update existing
-            foreach ( $customers as &$c ) {
-                if ( $c['id'] === $id ) {
-                    $c['name']  = $name;
-                    $c['email'] = $email;
-                    $c['notes'] = $notes;
-                    break;
-                }
-            }
-            unset( $c );
-        } else {
-            // New customer
-            $id = 'cust_' . time() . '_' . substr( md5( $name ), 0, 6 );
-            $customers[] = compact( 'id', 'name', 'email', 'notes' );
-        }
-
-        update_option( self::CUSTOMERS_OPTION, $customers, false );
-        wp_send_json_success( [ 'id' => $id, 'name' => $name, 'email' => $email, 'notes' => $notes ] );
-    }
-
-    // ── Admin AJAX: delete customer ──────────────────────────────────────────
-    public static function ajax_delete_customer() {
-        check_ajax_referer( 'ha_pf_test_connection', 'nonce' );
-        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorised.' );
-
-        $id        = sanitize_text_field( $_POST['customer_id'] ?? '' );
-        $customers = get_option( self::CUSTOMERS_OPTION, [] );
-        $customers = array_values( array_filter( $customers, fn($c) => $c['id'] !== $id ) );
-        update_option( self::CUSTOMERS_OPTION, $customers, false );
-
-        // Remove customer reference from any sessions
-        $sessions = get_option( self::OPTION_KEY, [] );
-        foreach ( $sessions as &$s ) {
-            if ( ( $s['customer_id'] ?? '' ) === $id ) unset( $s['customer_id'] );
-        }
-        unset( $s );
-        update_option( self::OPTION_KEY, $sessions, false );
-
-        wp_send_json_success( 'Customer deleted.' );
+    private static function get_active_booking_user_id( $ts ) {
+        global $wpdb;
+        $mysql_now = date( 'Y-m-d H:i:s', $ts );
+        
+        // Find a booking that covers the current timestamp
+        $user_id = $wpdb->get_var( $wpdb->prepare(
+            "SELECT user_id FROM " . HA_POWERFLOW_TABLE_BOOKINGS . " 
+             WHERE start_time <= %s AND end_time > %s 
+             ORDER BY created_at DESC LIMIT 1",
+            $mysql_now, $mysql_now
+        ));
+        
+        return $user_id ? (int)$user_id : null;
     }
 }

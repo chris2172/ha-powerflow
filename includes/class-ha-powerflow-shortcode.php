@@ -101,6 +101,9 @@ class HA_Powerflow_Shortcode {
             'gridEnergyOut'   => $o['grid_energy_out'] ?? '',
             'gridPriceIn'     => $o['grid_price_in'] ?? '',
             'gridPriceOut'    => $o['grid_price_out'] ?? '',
+            'gridPriceCheap'  => floatval( $o['grid_price_cheap'] ?? 0.10 ),
+            'gridPriceHigh'   => floatval( $o['grid_price_high'] ?? 0.30 ),
+            'gridShowSavings' => ! empty( $o['grid_show_savings'] ) ? 'true' : 'false',
             'loadEnergy'      => $o['load_energy'] ?? '',
             'enableWeather'    => ! empty( $o['enable_weather'] )  ? 'true' : 'false',
             'weatherFontSize'  => (int) ( $o['weather_font_size'] ?? 13 ),
@@ -138,8 +141,10 @@ class HA_Powerflow_Shortcode {
 
             // Special handling for battery energy split
             if ( $key === 'battery' ) {
-                $localized_data['modules'][$key]['energyIn'] = $o['battery_in_energy'] ?? '';
+                $localized_data['modules'][$key]['energyIn']  = $o['battery_in_energy'] ?? '';
                 $localized_data['modules'][$key]['energyOut'] = $o['battery_out_energy'] ?? '';
+                $localized_data['modules'][$key]['minDischarge'] = (int) ( $o['battery_min_discharge'] ?? 10 );
+                $localized_data['modules'][$key]['capacityKwh']  = floatval( $o['battery_capacity_kwh'] ?? 13.50 );
             }
 
             // EV extra fields
@@ -347,6 +352,14 @@ class HA_Powerflow_Shortcode {
                                   text-anchor="middle"
                                   font-family="'Exo 2', sans-serif" font-size="12"
                                   filter="url(#hapf-shadow)">—</text>
+                            <?php if ( $key === 'battery' ) : ?>
+                                <text id="ha-pf-battery-time"
+                                      x="<?php echo $m['x']; ?>" y="<?php echo $m['y'] + 60; ?>"
+                                      text-anchor="middle"
+                                      font-family="'Exo 2', sans-serif" font-size="10"
+                                      fill="var(--ha-pf-energy-color)"
+                                      filter="url(#hapf-shadow)">—</text>
+                            <?php endif; ?>
                         <?php elseif ( ! empty($all_modules[$key]['has_energy']) && ! empty($all_modules[$key]['has_eff']) ) : ?>
                              <text id="ha-pf-<?php echo $id_prefix; ?>-efficiency"
                                   x="<?php echo $m['x']; ?>" y="<?php echo $m['y'] + 44; ?>"
@@ -355,10 +368,35 @@ class HA_Powerflow_Shortcode {
                                   filter="url(#hapf-shadow)">—</text>
                         <?php elseif ( ! empty($all_modules[$key]['has_energy']) ) : ?>
                              <text id="ha-pf-<?php echo $id_prefix; ?>-energy"
-                                  x="<?php echo $m['x']; ?>" y="<?php echo $m['y'] + 44; ?>"
-                                  text-anchor="middle"
-                                  font-family="'Exo 2', sans-serif" font-size="12"
-                                  filter="url(#hapf-shadow)">—</text>
+                                   x="<?php echo $m['x']; ?>" y="<?php echo $m['y'] + 44; ?>"
+                                   text-anchor="middle"
+                                   font-family="'Exo 2', sans-serif" font-size="12"
+                                   filter="url(#hapf-shadow)">—</text>
+
+                             <?php if ( $key === 'solar' ) : ?>
+                                <circle id="ha-pf-solar-progress-ring"
+                                        cx="<?php echo $m['x']; ?>" cy="<?php echo $m['y'] + 17; ?>" r="42"
+                                        class="ha-pf-solar-progress-ring"
+                                        stroke-dasharray="0 264"
+                                        transform="rotate(-90 <?php echo $m['x']; ?> <?php echo $m['y'] + 17; ?>)"
+                                        style="<?php echo empty($o['solar_forecast_vis']) ? 'display:none;' : ''; ?>" />
+                                <text id="ha-pf-solar-forecast"
+                                      x="<?php echo $m['x']; ?>" y="<?php echo $m['y'] + 60; ?>"
+                                      text-anchor="middle"
+                                      font-family="'Exo 2', sans-serif" font-size="11"
+                                      fill="#8899bb"
+                                      filter="url(#hapf-shadow)"
+                                      style="<?php echo empty($o['solar_forecast_vis']) ? 'display:none;' : ''; ?>">Forecast: —</text>
+                             <?php endif; ?>
+                             <?php if ( $key === 'grid' ) : ?>
+                                <text id="ha-pf-grid-savings"
+                                      x="<?php echo $m['x']; ?>" y="<?php echo $m['y'] + 60; ?>"
+                                      text-anchor="middle"
+                                      font-family="'Exo 2', sans-serif" font-size="11"
+                                      fill="#22c55e"
+                                      filter="url(#hapf-shadow)"
+                                      style="<?php echo empty($o['grid_show_savings']) ? 'display:none;' : ''; ?>">Saving: —</text>
+                             <?php endif; ?>
                         <?php endif; ?>
                         <?php if ( $key === 'ev' ) :
                             $ev_extras = [
@@ -402,7 +440,7 @@ class HA_Powerflow_Shortcode {
                                   font-family="'Exo 2', sans-serif" font-size="11" font-weight="700" letter-spacing="2"
                                   filter="url(#hapf-shadow)"><?php echo strtoupper($label); ?></text>
                             <text class="ha-pf-custom-value" dy="24" text-anchor="middle"
-                                  font-family="Orbitron, sans-serif" font-size="19" font-weight="700"
+                                  font-family="Orbitron, sans-serif" font-size="<?php echo (int)($item['font_size'] ?? 19); ?>" font-weight="700"
                                   filter="url(#hapf-shadow)">—</text>
                         </g>
                         <?php

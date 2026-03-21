@@ -8,9 +8,48 @@
                                 <?php ha_pf_entity( $o, 'load_power',  'House Power Entity',  'sensor.load_power'  ); ?>
                                 <?php ha_pf_entity( $o, 'grid_energy', 'Grid Energy Import', 'sensor.grid_energy_import' ); ?>
                                 <?php ha_pf_entity( $o, 'grid_energy_out', 'Grid Energy Export', 'sensor.grid_energy_export' ); ?>
-                                <?php ha_pf_entity( $o, 'grid_price_in', 'Grid Price Import (£)', 'sensor.grid_price_import' ); ?>
-                                <?php ha_pf_entity( $o, 'grid_price_out', 'Grid Price Export (£)', 'sensor.grid_price_export' ); ?>
-                                <?php ha_pf_entity( $o, 'load_energy', 'House Energy Entity', 'sensor.load_energy' ); ?>
+                                 <?php ha_pf_entity( $o, 'grid_price_in', 'Grid Price Import (£)', 'sensor.grid_price_import' ); ?>
+                                 <?php ha_pf_entity( $o, 'grid_price_out', 'Grid Price Export (£)', 'sensor.grid_price_export' ); ?>
+                                 <tr>
+                                    <th scope="row"><label for="ha-pf-grid-price-cheap">Cheap Price Threshold</label></th>
+                                    <td>
+                                        <input type="number" step="0.01" id="ha-pf-grid-price-cheap" name="ha_powerflow_options[grid_price_cheap]" value="<?php echo esc_attr( $o['grid_price_cheap'] ?? '0.10' ); ?>" style="width:80px;" />
+                                        <span class="description"> (£) Flow turns Green below this.</span>
+                                    </td>
+                                 </tr>
+                                 <tr>
+                                    <th scope="row"><label for="ha-pf-grid-price-high">High Price Threshold</label></th>
+                                    <td>
+                                        <input type="number" step="0.01" id="ha-pf-grid-price-high" name="ha_powerflow_options[grid_price_high]" value="<?php echo esc_attr( $o['grid_price_high'] ?? '0.30' ); ?>" style="width:80px;" />
+                                        <span class="description"> (£) Flow turns Red above this.</span>
+                                    </td>
+                                 </tr>
+                                 <tr>
+                                    <th scope="row"><label>Show Savings Tracker</label></th>
+                                    <td>
+                                        <label class="ha-pf-toggle-label ha-pf-toggle-sm">
+                                            <input type="checkbox" name="ha_powerflow_options[grid_show_savings]" value="1" <?php checked( ! empty( $o['grid_show_savings'] ) ); ?>/>
+                                            <span class="ha-pf-slider"></span>
+                                        </label>
+                                        <span class="description"> Displays live savings (£/hr) under the Grid module.</span>
+                                    </td>
+                                 </tr>
+                                 <tr>
+                                    <th scope="row"><label for="ha-pf-battery-capacity">Battery Capacity (kWh)</label></th>
+                                    <td>
+                                        <input type="number" step="0.01" id="ha-pf-battery-capacity" name="ha_powerflow_options[battery_capacity_kwh]" value="<?php echo esc_attr( $o['battery_capacity_kwh'] ?? '13.50' ); ?>" style="width:100px;" />
+                                        <span class="description"> kWh (used for duration 2 decimal places)</span>
+                                    </td>
+                                 </tr>
+                                 <tr>
+                                    <th scope="row"><label for="ha-pf-battery-min-discharge">Min Battery SOC (%)</label></th>
+                                    <td>
+                                        <input type="number" step="1" id="ha-pf-battery-min-discharge" name="ha_powerflow_options[battery_min_discharge]" value="<?php echo esc_attr( $o['battery_min_discharge'] ?? '10' ); ?>" style="width:80px;" />
+                                        <span class="description"> % (stop discharge limit)</span>
+                                    </td>
+                                 </tr>
+                                 <?php ha_pf_entity( $o, 'load_energy', 'House Energy Entity', 'sensor.load_energy' ); ?>
+                                <?php ha_pf_entity( $o, 'solar_forecast', 'Solar Forecast Entity', 'sensor.solcast_forecast_today', 'Used for Expected vs Actual comparison.' ); ?>
                             </table>
                         </div>
                     </div>
@@ -94,6 +133,7 @@
                                         <th class="ha-pf-col-label">Label</th>
                                         <th class="ha-pf-col-entity">Entity ID</th>
                                         <th class="ha-pf-col-pos" style="width:240px;">Position (X, Y)</th>
+                                        <th class="ha-pf-col-size" style="width:100px;">Size (px)</th>
                                         <th class="ha-pf-col-visible" style="width:100px;">Visible</th>
                                         <th style="width:50px;"></th>
                                     </tr>
@@ -112,6 +152,9 @@
                                                 <input type="number" name="ha_powerflow_options[custom_entities][<?php echo $index; ?>][y]" value="<?php echo esc_attr( $item['y'] ?? 0 ); ?>" class="small-text" min="0" max="700" />
                                                 <button type="button" class="ha-pf-coord-picker-btn" title="Pick position from image">🎯</button>
                                             </div>
+                                        </td>
+                                        <td>
+                                            <input type="number" name="ha_powerflow_options[custom_entities][<?php echo $index; ?>][font_size]" value="<?php echo (int)( $item['font_size'] ?? 19 ); ?>" class="small-text" min="8" max="100" />
                                         </td>
                                         <td>
                                             <label class="ha-pf-toggle-label ha-pf-toggle-sm">

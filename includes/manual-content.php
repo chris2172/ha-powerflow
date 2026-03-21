@@ -1,4 +1,6 @@
-<?php if ( ! defined( 'ABSPATH' ) ) exit; ?>
+<?php if ( ! defined( 'ABSPATH' ) ) exit;
+// Bracket characters built at runtime so WordPress shortcode parser never matches them
+$_b1 = chr(91); $_b2 = chr(93); ?>
 <div class="ha-pf-manual-wrapper">
     <style>
         .ha-pf-manual-wrapper {
@@ -309,7 +311,8 @@
     <nav class="manual-nav">
         <a href="#welcome">Welcome</a>
         <a href="#setup">Setup</a>
-        <a href="#modules">Modules</a>
+        <a href="#modules">Sensors</a>
+        <a href="#pricing">Smart Pricing</a>
         <a href="#ev">EV Charging</a>
         <a href="#visuals">Design</a>
         <a href="#pro">Advanced</a>
@@ -384,21 +387,46 @@
                 <strong>Smart Discovery:</strong> Click <strong>Scan for Entities</strong> in the Sensors tab. The plugin will search your HA instance and suggest matching sensors automatically.
             </div>
 
-            <h3>Currency Symbol</h3>
-            <p>Set your default currency symbol (e.g. <code>£</code>, <code>€</code>, <code>$</code>) under <strong>Sensors → Defaults</strong>. This is used across all cost displays in the widget and EV charge summary.</p>
+            <h3>🔋 Battery Intelligence <span class="badge badge-pro">Pro</span></h3>
+            <p>The HUD can predict exactly how long your battery will last or how soon it will be full. To enable this, enter your battery's <strong>Capacity (kWh)</strong> and <strong>Minimum State of Charge (%)</strong> in the Sensors tab.</p>
+            <ul>
+                <li><strong>Time-to-Empty:</strong> Shown when your house is discharging the battery (e.g. <code>4h 20m</code> remaining).</li>
+                <li><strong>Time-to-Full:</strong> Shown when solar is charging the battery.</li>
+            </ul>
+
+            <h3>☀️ Solar Forecasting</h3>
+            <p>Link your <strong>Solcast</strong> or <strong>Forecast.Solar</strong> entity to see a progress ring around your PV icon. The ring fills as you reach your daily predicted generation, with the total forecast displayed clearly (e.g. <code>18.5 kWh Forecast</code>).</p>
 
             <h3>Quick Modules</h3>
             <p>Use the toggles at the top of the settings page to enable or disable modules. If you don't have an EV or Heat Pump, turn them off to keep your HUD clean. Note that the <strong>EV History</strong> tab only appears when the EV module is enabled.</p>
         </div>
     </section>
 
+    <!-- ── Smart Pricing ────────────────────────────────────────────────── -->
+    <section id="pricing">
+        <div class="card">
+            <h2>📉 3. Smart Pricing & Grid Logic <span class="badge badge-new">New</span></h2>
+            <p>If you use a smart tariff like <strong>Octopus Agile</strong>, the HUD can dynamically react to real-time electricity prices.</p>
+
+            <h3>Price-Driven Flow</h3>
+            <p>By entering your <strong>Grid Price Import</strong> entity, the grid flow lines will change color automatically:</p>
+            <ul>
+                <li><strong style="color:#2ecc71">🟢 Green Flow:</strong> When the price is below your "Cheap Energy" threshold (e.g. 10p). Great for free or plunge pricing events!</li>
+                <li><strong style="color:#ef4444">🔴 Red Flow:</strong> When the price exceeds your "Peak Energy" threshold (e.g. 35p). A visual warning to avoid heavy usage.</li>
+            </ul>
+            <p>Configure these thresholds under <strong>Settings → Sensors → Grid Pricing</strong>.</p>
+        </div>
+    </section>
+
     <!-- ── EV ───────────────────────────────────────────────────────────── -->
     <section id="ev">
         <div class="card">
-            <h2>🚗 3. EV Charging — Extended Telemetry <span class="badge badge-new">New</span></h2>
-            <p>The EV module goes beyond Power and SOC. Four additional fields can be pulled from your charger and displayed on the HUD. Each has its own <strong>Visible</strong> toggle so you can show or hide them independently.</p>
+            <h2>🚗 4. EV Charging & User Tracking</h2>
+            <p>The EV module tracks every charging session automatically, calculating costs and efficiency whilst you charge.</p>
 
-            <p>Configure these under <strong>Settings → Modules → EV</strong>.</p>
+            <div class="info">
+                <strong>WordPress Integration:</strong> Charging sessions are linked directly to your site's <strong>WordPress User</strong> accounts. Simply pick a user from the dropdown in the EV History table to attribute their usage.
+            </div>
 
             <div class="ev-field-row">
                 <div class="ev-field-icon">⚡</div>
@@ -414,13 +442,6 @@
                     <div class="ev-field-desc">Live text state from your charger (e.g. <em>Charging</em>, <em>Eco+</em>, <em>EV Disconnected</em>). This field also drives automatic session tracking.</div>
                 </div>
             </div>
-            <div class="ev-field-row">
-                <div class="ev-field-icon">⚙️</div>
-                <div>
-                    <div class="ev-field-name">Charge Mode</div>
-                    <div class="ev-field-desc">Active charging mode from your charger (e.g. <em>Smart</em>, <em>Boost</em>, <em>Eco</em>).</div>
-                </div>
-            </div>
             <div class="ev-field-row" style="border-bottom:none;">
                 <div class="ev-field-icon">💷</div>
                 <div>
@@ -429,36 +450,13 @@
                 </div>
             </div>
 
-            <h3>How Session Tracking Works</h3>
-            <p>The plugin tracks charging sessions automatically in the background — no configuration needed beyond entering your sensor entity IDs above.</p>
-
-            <table>
-                <thead>
-                    <tr><th>Plug Status received</th><th>What happens</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td>Charging, Eco+, Boost, Waiting, or any other value</td><td>Session continues. All states except Disconnected count as the same session.</td></tr>
-                    <tr><td>Contains "Disconnected"</td><td>Session ends and is saved as completed.</td></tr>
-                    <tr><td><code>unavailable</code>, <code>unknown</code>, <code>N/A</code>, empty</td><td>Ignored — never starts or ends a session.</td></tr>
-                </tbody>
-            </table>
-
-            <div class="info">
-                <strong>Note:</strong> Session data is recorded only while a page containing <code>[ha_powerflow]</code> is open in a browser. The widget polls Home Assistant and logs each data point in the background.
-            </div>
-
             <h3>EV Charge Summary Shortcode</h3>
-            <p>Place this shortcode on any page or post to show a full history of your charging sessions:</p>
-
-            <div class="shortcode-block">[ev_charge_summary]</div>
+            <p>Place this shortcode on any page to show a full history of your charging sessions:</p>
+            <div class="shortcode-block">EV_CHARGE_SUMMARY <span style="font-size:0.75em;opacity:0.7;">(shortcode)</span></div>
 
             <p>To auto-refresh the page during an active session, add the <code>refresh</code> attribute with the number of seconds:</p>
+            <div class="shortcode-block">EV_CHARGE_SUMMARY refresh=60 <span style="font-size:0.75em;opacity:0.7;">(shortcode)</span></div>
 
-            <div class="shortcode-block">[ev_charge_summary refresh=60]</div>
-
-            <p>The refresh only fires whilst a live session is in progress — when the EV disconnects, auto-refresh stops automatically.</p>
-
-            <h3>What the Summary Shows</h3>
             <div class="feature-grid">
                 <div class="feature-item">
                     <strong>🟢 Live Session Banner</strong><br>
@@ -466,81 +464,73 @@
                 </div>
                 <div class="feature-item">
                     <strong>📊 Session Stats</strong><br>
-                    Duration, energy added, total cost, average and peak charge rate, rate per kWh, data point count, start and end times.
-                </div>
-                <div class="feature-item">
-                    <strong>📈 Dual-Axis Chart</strong><br>
-                    kWh added over time (area line) with charge power in kW (bars). Tooltip shows running cost at every point.
-                </div>
-                <div class="feature-item">
-                    <strong>🕓 Previous Session</strong><br>
-                    The last completed session always stays visible for reference — even during a new live session.
+                    Duration, energy added, total cost, average/peak rates, and Solar % contribution.
                 </div>
             </div>
-
-            <p style="margin-top:24px;"><strong>Total Cost</strong> is always calculated as <code>Charge Added (kWh) × Co Charger Cost (rate)</code> using your Currency Symbol.</p>
 
             <h3>EV History Tab (Admin)</h3>
-            <p>When the EV module is enabled, an <strong>⚡ EV History</strong> tab appears in plugin settings. It provides:</p>
             <ul>
-                <li>Summary stats — total sessions, total energy, total cost across all recorded sessions</li>
-                <li>Full session table with date, times, duration, kWh, cost, avg/peak rates, and status</li>
-                <li>Per-row delete button to remove individual sessions</li>
-                <li><strong>Clear All History</strong> — removes completed sessions, preserves any active session</li>
-                <li><strong>Export CSV</strong> — downloads a dated <code>.csv</code> of the full table instantly</li>
+                <li><strong>Summary stats</strong> — total sessions, energy, and costs recorded.</li>
+                <li><strong>User Assignment</strong> — link sessions to WordPress accounts via dropdown.</li>
+                <li><strong>Export CSV</strong> — download a dated <code>.csv</code> for accounting or reimbursement.</li>
+                <li><strong>Clear All History</strong> — clean up completed sessions while preserving active ones.</li>
             </ul>
-
-            <div class="tip">
-                The EV History tab hides automatically when the EV module is disabled, and reappears the moment you enable it — no page reload required.
-            </div>
         </div>
     </section>
 
     <!-- ── Design ───────────────────────────────────────────────────────── -->
     <section id="visuals">
         <div class="card">
-            <h2>🎨 4. Design & Appearance</h2>
+            <h2>🎨 5. Design & Appearance</h2>
             <p>Make the HUD yours. The display is split into <strong>Labels</strong> (text) and <strong>Lines</strong> (the animated flow).</p>
-
-            <h3>Smart Palette</h3>
-            <p>If you leave the Line Color fields blank, the plugin uses its Smart Logic to automatically colour flows:</p>
-            <div class="feature-grid">
-                <div class="feature-item">
-                    <strong style="color:#2ecc71">Green Flows</strong><br>
-                    Exporting to the grid or charging from solar.
-                </div>
-                <div class="feature-item">
-                    <strong style="color:#1a73e8">Blue Flows</strong><br>
-                    Importing from the grid or normal consumption.
-                </div>
-                <div class="feature-item">
-                    <strong style="color:#f1c40f">Gold Flows</strong><br>
-                    Solar generation active.
-                </div>
-                <div class="feature-item">
-                    <strong style="color:#e67e22">Orange Flows</strong><br>
-                    Battery discharging to sustain the home.
-                </div>
-            </div>
 
             <h3>The Live Preview</h3>
             <p>Toggle <strong>Live Preview</strong> in the admin settings to see your changes in real time. Colour adjustments, module visibility, and label positions all update instantly without saving.</p>
 
             <h3>Custom Labels</h3>
-            <p>Set independent colours for the <strong>Title</strong> (e.g. "SOLAR"), <strong>Power</strong> (e.g. "4.2 kW"), and <strong>Energy</strong> (e.g. "12.5 kWh") text to keep them legible over any background image. The EV extended telemetry fields (Charge Added, Plug Status, Charge Mode, Co Charger Cost) use the Energy colour.</p>
+            <p>Set independent colours for the <strong>Title</strong>, <strong>Power</strong>, and <strong>Energy</strong> text to keep them legible over any background image. You can also adjust the <strong>Font Size (px)</strong> for additional HUD sensors individually.</p>
         </div>
     </section>
 
     <!-- ── Advanced ─────────────────────────────────────────────────────── -->
     <section id="pro">
         <div class="card">
-            <h2>🚀 5. Advanced HUD Mastery</h2>
+            <h2>🚀 6. Advanced HUD Mastery</h2>
 
             <h3>🎯 Drag & Drop Positioning</h3>
             <p>Enable <strong>🐛 Debug Mode</strong> at the bottom of the settings page, then click and drag any entity label or module icon in the Live Preview. Coordinates update automatically when you drop.</p>
 
             <h3>Additional HUD Entities</h3>
-            <p>Want to show your pool temperature or greenhouse humidity? Use the <strong>Additional HUD Entities</strong> section under the Sensors tab. Add unlimited extra sensors with custom labels and place them anywhere on the canvas. Each has its own Visible toggle.</p>
+            <p>Want to show your pool temperature or greenhouse humidity? Use the <strong>Additional HUD Entities</strong> section under the Sensors tab. Add unlimited extra sensors with custom labels and place them anywhere on the canvas. Each sensor can have a custom font size to fit your layout perfectly.</p>
+
+            <h3>🛠️ Maintenance & Health</h3>
+            <p>Open the <strong>Maintenance</strong> tab to monitor your plugin's performance:</p>
+            <ul>
+                <li><strong>Latency:</strong> How fast Home Assistant is responding.</li>
+                <li><strong>Success Rate:</strong> Percentage of successful data checks.</li>
+                <li><strong>Last Seen:</strong> The exact time of the last successful data poll.</li>
+                <li><strong>Snapshots:</strong> Automatically created before every save—restore any previous configuration with one click.</li>
+            </ul>
+
+            <h3>🗓️ EV Booking Calendar <span class="badge badge-new">New</span></h3>
+            <p>Coordinate charging with other users using the simple 7-day booking tool. Any logged-in user can reserve a 30-minute slot.</p>
+            <div class="shortcode-block">[ev_booking_calendar] <span style="font-size:0.75em;opacity:0.7;">(shortcode)</span></div>
+            <ul>
+                <li><strong>Privacy:</strong> Regular users only see if a slot is "Booked".</li>
+                <li><strong>Admin View:</strong> Administrators see the name of the user who booked each slot and can cancel any session.</li>
+                <li><strong>Interactive:</strong> Click any available slot to book instantly.</li>
+                <li><strong>Estimates:</strong> Real-time cost forecasting based on grid price, markup ranges, and specialized support for <strong>Intelligent Octopus Go</strong> (split peak/off-peak rates).</li>
+            </ul>
+
+            <h3>⚡ User Dashboard <span class="badge badge-new">New</span></h3>
+            <p>Users can manage their upcoming charges and sync them to their personal devices.</p>
+            <div class="shortcode-block">[my_ev_bookings] <span style="font-size:0.75em;opacity:0.7;">(shortcode)</span></div>
+            <ul>
+                <li><strong>Dynamic Cards:</strong> View date, time, and session costs at a glance.</li>
+                <li><strong>iCal Sync:</strong> Export any booking to Google, Apple, or Outlook calendars.</li>
+                <li><strong>Self-Service:</strong> Cancel upcoming sessions directly from the dashboard.</li>
+                <li><strong>Automation:</strong> Receive instant email confirmations and reminders.</li>
+            </ul>
 
             <h3>Shortcode Reference</h3>
             <table>
@@ -557,17 +547,19 @@
                         <td>EV charging session history with charts and stats.</td>
                     </tr>
                     <tr>
-                        <td><code>[ev_charge_summary refresh=60]</code></td>
-                        <td>Same as above but auto-refreshes every 60 seconds whilst a session is active. Any number of seconds is accepted.</td>
+                        <td><code>[ev_booking_calendar]</code></td>
+                        <td>7-day EV charging reservation calendar.</td>
+                    </tr>
+                    <tr>
+                        <td><code>[my_ev_bookings]</code></td>
+                        <td>A user's personal dashboard for upcoming charging sessions.</td>
+                    </tr>
+                    <tr>
+                        <td><code>[ha_powerflow_manual]</code></td>
+                        <td>This comprehensive guide you are reading now!</td>
                     </tr>
                 </tbody>
             </table>
-
-            <h3>Snapshots & Encrypted Backups</h3>
-            <p>Every time you click Save, the plugin creates an automatic <strong>Snapshot</strong>. To roll back, open the <strong>Maintenance</strong> tab, pick a previous snapshot, and click <strong>Restore</strong>.</p>
-            <div class="tip">
-                <strong>🔒 Security First:</strong> Your Home Assistant Access Token and URL are encrypted with <code>AES-256</code> before being saved to any snapshot file.
-            </div>
         </div>
     </section>
 

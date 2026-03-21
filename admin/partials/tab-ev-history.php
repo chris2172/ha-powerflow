@@ -3,107 +3,121 @@
 <div id="ha-pf-tab-ev-history" class="ha-pf-tab-content">
     <?php
     $sessions   = get_option( HA_Powerflow_EV_Session::OPTION_KEY, [] );
-    $customers  = get_option( HA_Powerflow_EV_Session::CUSTOMERS_OPTION, [] );
     if ( ! is_array( $sessions ) )  $sessions  = [];
-    if ( ! is_array( $customers ) ) $customers = [];
+
+    // Fetch WordPress Users for session assignment
+    $users = get_users([ 'fields' => ['ID', 'display_name', 'user_email'] ]);
+    $user_map = [];
+    foreach ( $users as $u ) { $user_map[ $u->ID ] = $u; }
 
     $o        = get_option( 'ha_powerflow_options', [] );
     $currency = esc_html( $o['ev_currency_symbol'] ?? '£' );
-    $surcharge = HA_Powerflow_EV_Session::CO_CHARGER_SURCHARGE;
 
-    $completed = array_filter( $sessions, fn($s) => ($s['status'] ?? '') === 'completed' );
-    $active    = array_filter( $sessions, fn($s) => ($s['status'] ?? '') === 'active' );
-
-    // Build customer lookup map
-    $customer_map = [];
-    foreach ( $customers as $c ) { $customer_map[ $c['id'] ] = $c; }
+    $completed = array_filter( $sessions, function($s) { return ($s['status'] ?? '') === 'completed'; } );
+    $active    = array_filter( $sessions, function($s) { return ($s['status'] ?? '') === 'active'; } );
 
     // Aggregate stats
-    $total_kwh = $total_cost = $total_cocharger = $total_paid = $total_outstanding = 0;
+    $total_kwh = $total_cost = $total_paid = $total_outstanding = 0;
     foreach ( $completed as $s ) {
         $pts = $s['data_points'] ?? [];
         $max_kwh = 0;
         foreach ( $pts as $p ) { if ( $p['kwh'] > $max_kwh ) $max_kwh = $p['kwh']; }
-        $rate        = floatval( $s['cost_rate'] ?? 0 );
-        $cost        = $max_kwh * $rate;
-        $cocharger   = $cost * ( 1 + $surcharge );
-        $total_kwh  += $max_kwh;
-        $total_cost += $cost;
-        $total_cocharger += $cocharger;
+        $rate = floatval( $s['cost_rate'] ?? 0 );
+        $cost = HA_Powerflow_EV_Session::calculate_session_cost( $pts, $rate, $o );
+        $total_kwh     += $max_kwh;
+        $total_cost    += $cost;
         if ( ! empty( $s['payment_received'] ) ) {
-            $total_paid += $cocharger;
+            $total_paid += $cost;
         } else {
-            $total_outstanding += $cocharger;
+            $total_outstanding += $cost;
         }
     }
     ?>
 
-    <!-- ── Customers Card ────────────────────────────────────────────────── -->
-    <div class="ha-pf-card" style="margin-bottom:24px;">
-        <h2>👤 Customers</h2>
-        <p class="description">Add customers here to assign them to charging sessions below.</p>
-
-        <table class="wp-list-table widefat fixed striped" id="ha-pf-customers-table" style="margin-bottom:16px;">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Notes</th>
-                    <th style="width:80px;">Sessions</th>
-                    <th style="width:100px;"></th>
-                </tr>
-            </thead>
-            <tbody>
-            <?php if ( empty( $customers ) ) : ?>
-                <tr id="ha-pf-no-customers-row"><td colspan="5" style="color:#64748b; font-style:italic;">No customers yet. Add one below.</td></tr>
-            <?php else : ?>
-                <?php foreach ( $customers as $c ) :
-                    $session_count = count( array_filter( $sessions, fn($s) => ($s['customer_id'] ?? '') === $c['id'] ) );
-                ?>
-                <tr data-customer-id="<?php echo esc_attr( $c['id'] ); ?>">
-                    <td><strong><?php echo esc_html( $c['name'] ); ?></strong></td>
-                    <td><?php echo esc_html( $c['email'] ?? '' ); ?></td>
-                    <td><?php echo esc_html( $c['notes'] ?? '' ); ?></td>
-                    <td><?php echo esc_html( $session_count ); ?></td>
-                    <td>
-                        <button type="button" class="button button-small ha-pf-edit-customer" data-customer-id="<?php echo esc_attr( $c['id'] ); ?>" data-name="<?php echo esc_attr( $c['name'] ); ?>" data-email="<?php echo esc_attr( $c['email'] ?? '' ); ?>" data-notes="<?php echo esc_attr( $c['notes'] ?? '' ); ?>">Edit</button>
-                        <button type="button" class="button button-small ha-pf-delete-customer" data-customer-id="<?php echo esc_attr( $c['id'] ); ?>" style="color:#dc2626;">✕</button>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-            <?php endif; ?>
-            </tbody>
-        </table>
-
-        <!-- Add / Edit customer form -->
-        <div id="ha-pf-customer-form" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:16px;">
-            <strong id="ha-pf-customer-form-title" style="display:block; margin-bottom:12px; font-size:13px;">➕ Add New Customer</strong>
-            <input type="hidden" id="ha-pf-customer-id-field" value="" />
-            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
-                <div>
-                    <label style="font-size:11px; font-weight:700; display:block; margin-bottom:4px; color:#64748b;">NAME *</label>
-                    <input type="text" id="ha-pf-customer-name" class="regular-text" placeholder="e.g. Jane Smith" style="width:200px;" />
-                </div>
-                <div>
-                    <label style="font-size:11px; font-weight:700; display:block; margin-bottom:4px; color:#64748b;">EMAIL</label>
-                    <input type="email" id="ha-pf-customer-email" class="regular-text" placeholder="jane@example.com" style="width:200px;" />
-                </div>
-                <div>
-                    <label style="font-size:11px; font-weight:700; display:block; margin-bottom:4px; color:#64748b;">NOTES</label>
-                    <input type="text" id="ha-pf-customer-notes" class="regular-text" placeholder="e.g. Blue Nissan Leaf" style="width:200px;" />
-                </div>
-                <div style="display:flex; gap:8px;">
-                    <button type="button" id="ha-pf-save-customer" class="button button-primary">Save Customer</button>
-                    <button type="button" id="ha-pf-cancel-customer-edit" class="button" style="display:none;">Cancel</button>
-                </div>
-            </div>
-            <span id="ha-pf-customer-msg" style="display:block; margin-top:8px; font-size:12px;"></span>
-        </div>
-    </div>
-
     <!-- ── Session History Card ───────────────────────────────────────────── -->
     <div class="ha-pf-card">
         <h2>⚡ EV Charging History</h2>
+        <p class="description">Review charging sessions and assign them to WordPress Users.</p>
+        
+        <!-- Booking Configuration Section -->
+        <div class="ha-pf-booking-config">
+            <h3>📅 Booking & Fair Usage Settings</h3>
+            <div class="ha-pf-config-grid">
+                <div class="ha-pf-control" style="grid-column: span 2;">
+                    <label>Admin Markup Ranges</label>
+                    <table id="ha-pf-markup-ranges" class="widefat">
+                        <thead>
+                            <tr>
+                                <th>Min Price (<?php echo $currency; ?>)</th>
+                                <th>Max Price (<?php echo $currency; ?>)</th>
+                                <th>Markup (%)</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            $ranges = $o['ev_booking_markup_ranges'] ?? [];
+                            if ( empty( $ranges ) ) {
+                                // Default row if none
+                                $ranges[] = [ 'min' => 0, 'max' => 9.99, 'pct' => 20 ];
+                            }
+                            foreach ( $ranges as $i => $r ) : ?>
+                            <tr data-index="<?php echo $i; ?>">
+                                <td><input type="number" step="0.01" class="ha-pf-markup-min" value="<?php echo esc_attr( $r['min'] ); ?>" /></td>
+                                <td><input type="number" step="0.01" class="ha-pf-markup-max" value="<?php echo esc_attr( $r['max'] ); ?>" /></td>
+                                <td><input type="number" step="0.1" class="ha-pf-markup-pct" value="<?php echo esc_attr( $r['pct'] ); ?>" /></td>
+                                <td><button type="button" class="button ha-pf-remove-range">×</button></td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="4"><button type="button" id="ha-pf-add-range" class="button">＋ Add Range</button></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    <span class="description">Percentage markup based on the grid price at the time of booking.</span>
+                </div>
+                <div class="ha-pf-control">
+                    <label>Max Duration (Hours)</label>
+                    <input type="number" step="0.5" id="ha-pf-max-duration" value="<?php echo esc_attr( $o['ev_booking_max_duration'] ?? 4 ); ?>" />
+                    <span class="description">Maximum session length allowed.</span>
+                </div>
+                <div class="ha-pf-control">
+                    <label>Booking Buffer (Mins)</label>
+                    <input type="number" step="5" id="ha-pf-buffer" value="<?php echo esc_attr( $o['ev_booking_buffer'] ?? 15 ); ?>" />
+                    <span class="description">Gap between separate bookings.</span>
+                </div>
+                <div class="ha-pf-control">
+                    <label>Max Active Bookings</label>
+                    <input type="number" id="ha-pf-max-active" value="<?php echo esc_attr( $o['ev_booking_max_active'] ?? 2 ); ?>" />
+                    <span class="description">Per user at any one time.</span>
+                </div>
+                <!-- Intelligent Octopus Go Settings -->
+                <div class="ha-pf-control" style="grid-column: span 1; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                    <label>Intelligent Octopus Go</label>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="ha-pf-intel-mode" <?php checked( ! empty( $o['ev_booking_intel_mode'] ) ); ?> />
+                        <span class="description">Enable split peak/off-peak costing.</span>
+                    </div>
+                </div>
+                <div class="ha-pf-control" style="grid-column: span 1; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                    <label>Off-Peak Window</label>
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <input type="time" id="ha-pf-offpeak-start" value="<?php echo esc_attr( $o['ev_booking_offpeak_start'] ?? '23:30' ); ?>" style="padding:4px; font-size:12px;" />
+                        <span>to</span>
+                        <input type="time" id="ha-pf-offpeak-end" value="<?php echo esc_attr( $o['ev_booking_offpeak_end'] ?? '05:30' ); ?>" style="padding:4px; font-size:12px;" />
+                    </div>
+                </div>
+                <div class="ha-pf-control" style="grid-column: span 1; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                    <label>Peak Price Override (<?php echo $currency; ?>)</label>
+                    <input type="number" step="0.0001" id="ha-pf-peak-price" value="<?php echo esc_attr( $o['ev_booking_peak_price'] ?? 0.30 ); ?>" />
+                    <span class="description">Price used outside the off-peak window.</span>
+                </div>
+            </div>
+            <button type="button" id="ha-pf-save-booking-settings" class="button button-primary">Save Booking Settings</button>
+            <span id="ha-pf-booking-msg" style="margin-left:10px; font-size:12px;"></span>
+        </div>
 
         <!-- Summary stats -->
         <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:28px;">
@@ -154,8 +168,8 @@
                     <th style="width:60px;">End</th>
                     <th style="width:70px;">Duration</th>
                     <th style="width:70px;">kWh</th>
-                    <th style="width:75px;">Base Cost</th>
-                    <th style="width:90px;">Co Charger</th>
+                    <th style="width:75px;">Grid Cost</th>
+                    <th style="width:90px;">Total Cost</th>
                     <th style="width:70px;">Avg kW</th>
                     <th style="width:70px;">Peak kW</th>
                     <th style="width:70px;">Paid</th>
@@ -180,8 +194,8 @@
                     if ( $p['power'] > 0 ) $powers[] = $p['power'];
                 }
                 $kwh         = round( $max_kwh, 2 );
-                $base_cost   = $rate > 0 ? $kwh * $rate : null;
-                $co_cost     = $base_cost !== null ? $base_cost * ( 1 + $surcharge ) : null;
+                $total_session_cost = HA_Powerflow_EV_Session::calculate_session_cost( $pts, $rate, $o );
+                $grid_cost          = $rate > 0 ? $kwh * $rate : null;
                 $avg_kw      = ! empty( $powers ) ? round( array_sum($powers)/count($powers)/1000, 2 ) : null;
                 $peak_kw     = ! empty( $powers ) ? round( max($powers)/1000, 2 ) : null;
                 $dur_secs    = $end_ts ? ( $end_ts - $start_ts ) : ( time() - $start_ts );
@@ -191,10 +205,10 @@
             <tr data-session-id="<?php echo esc_attr( $sid ); ?>" <?php if ($paid) echo 'class="ha-pf-row-paid"'; ?>>
                 <td><?php echo esc_html( $num + 1 ); ?></td>
                 <td>
-                    <select class="ha-pf-assign-customer" data-session-id="<?php echo esc_attr( $sid ); ?>" style="width:100%; font-size:11px; max-width:120px;">
+                    <select class="ha_pf_assign_user" data-session-id="<?php echo esc_attr( $sid ); ?>" style="width:100%; font-size:11px; max-width:120px;">
                         <option value="">— unassigned —</option>
-                        <?php foreach ( $customers as $c ) : ?>
-                        <option value="<?php echo esc_attr( $c['id'] ); ?>" <?php selected( $cust_id, $c['id'] ); ?>><?php echo esc_html( $c['name'] ); ?></option>
+                        <?php foreach ( $users as $u ) : ?>
+                        <option value="<?php echo esc_attr( $u->ID ); ?>" <?php selected( $cust_id, $u->ID ); ?>><?php echo esc_html( $u->display_name ); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </td>
@@ -203,8 +217,8 @@
                 <td><code><?php echo $end_ts ? esc_html( date('H:i', $end_ts) ) : ( $status === 'active' ? '<em>Live</em>' : '—' ); ?></code></td>
                 <td><?php echo esc_html( $dur_str ); ?></td>
                 <td><strong><?php echo esc_html( $kwh ); ?></strong></td>
-                <td><?php echo $base_cost !== null ? esc_html( $currency . number_format( $base_cost, 2 ) ) : '—'; ?></td>
-                <td style="font-weight:700; color:#7c3aed;"><?php echo $co_cost !== null ? esc_html( $currency . number_format( $co_cost, 2 ) ) : '—'; ?></td>
+                <td><?php echo $grid_cost !== null ? esc_html( $currency . number_format( $grid_cost, 2 ) ) : '—'; ?></td>
+                <td style="font-weight:700; color:#7c3aed;"><?php echo $total_session_cost !== null ? esc_html( $currency . number_format( $total_session_cost, 2 ) ) : '—'; ?></td>
                 <td><?php echo $avg_kw !== null  ? esc_html( $avg_kw )  : '—'; ?></td>
                 <td><?php echo $peak_kw !== null ? esc_html( $peak_kw ) : '—'; ?></td>
                 <td style="text-align:center;">
@@ -247,6 +261,20 @@
 </div>
 
 <style>
+.ha-pf-booking-config {
+    background: #fff; border: 1px solid #7c3aed; border-radius: 12px;
+    padding: 20px; margin-bottom: 28px; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.08);
+}
+.ha-pf-booking-config h3 { margin-top: 0; color: #7c3aed; display: flex; align-items: center; gap: 8px; }
+.ha-pf-config-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px; margin-bottom: 20px;
+}
+.ha-pf-control { display: flex; flex-direction: column; gap: 6px; }
+.ha-pf-control label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; }
+.ha-pf-control input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+.ha-pf-control .description { font-size: 11px; color: #94a3b8; }
+
 .ha-pf-history-stat {
     background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
     padding: 12px 16px; display: flex; flex-direction: column; gap: 4px;

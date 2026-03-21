@@ -103,6 +103,7 @@ class HA_Powerflow_Ajax {
             'grid_price_in'      => $o['grid_price_in']      ?? '',
             'grid_price_out'     => $o['grid_price_out']     ?? '',
             'load_energy'        => $o['load_energy']        ?? '',
+            'solar_forecast'     => $o['solar_forecast']     ?? '',
             'pv_power'           => $o['pv_power']           ?? '',
             'pv_energy'          => $o['pv_energy']          ?? '',
             'battery_power'      => $o['battery_power']      ?? '',
@@ -121,8 +122,11 @@ class HA_Powerflow_Ajax {
             'weather'            => $o['weather_entity']     ?? '',
         ];
 
-        $template_keys = [];
-        $data = [];
+        $cache_key   = 'ha_pf_data_cache';
+        $cached_data = get_transient( $cache_key );
+        if ( false !== $cached_data && is_array( $cached_data ) && isset( $cached_data['grid_power'] ) ) {
+            return rest_ensure_response( $cached_data );
+        }
 
         foreach ( $sensors as $key => $entity_id ) {
             if ( ! $entity_id ) {
@@ -143,64 +147,87 @@ class HA_Powerflow_Ajax {
             $entity_id = $item['entity'] ?? '';
             if ( ! $entity_id ) continue;
 
-            $template_keys[] = sprintf(
-                '"custom_%d": {"state": states("%s"), "unit": state_attr("%s", "unit_of_measurement")}',
-                $index,
-                $entity_id,
-                $entity_id
-            );
+            $sensors['custom_' . $index] = $entity_id;
         }
 
-        if ( ! empty( $template_keys ) ) {
-            $template_content = sprintf(
-                '{%% set data = {%s} %%}{{ data | to_json }}',
-                implode( ',', $template_keys )
-            );
-
-            $cache_key   = 'ha_pf_data_cache';
-            $cached_data = get_transient( $cache_key );
-            
-            // The previous AJAX method might have stored boolean 'true' or incorrectly formatted arrays.
-            // We ensure it is a valid associative array containing our expected keys before early return.
-            if ( false !== $cached_data && is_array( $cached_data ) && isset( $cached_data['grid_power'] ) ) {
-                return rest_ensure_response( $cached_data );
-            }
-
-            $start_time = microtime( true );
-            $response = wp_remote_post( $ha_url . '/api/template', [
-                'headers'   => $headers,
-                'body'      => json_encode( [ 'template' => $template_content ] ),
-                'timeout'   => 4,
-                'sslverify' => true,
-            ] );
-            $end_time = microtime( true );
-            $latency = round( ( $end_time - $start_time ) * 1000, 2 );
-
-            if ( is_wp_error( $response ) ) {
-                self::record_health_metric( $latency, false );
-                return new WP_Error( 'ha_error', 'Could not reach Home Assistant: ' . $response->get_error_message(), [ 'status' => 500 ] );
-            }
-
-            $body = json_decode( wp_remote_retrieve_body( $response ), true );
-            $success = is_array( $body );
-            self::record_health_metric( $latency, $success );
-
-            if ( $success ) {
-                // Return data formatted the same way JS expects.
-                foreach ( $body as $k => $v ) {
-                    $data[ $k ] = [
-                        'state' => isset( $v['state'] ) ? $v['state'] : 'N/A',
-                        'unit'  => ( isset( $v['unit'] ) && $v['unit'] !== null ) ? $v['unit'] : '',
-                    ];
-                }
-
-                set_transient( $cache_key, $data, 5 );
-            } else {
-                return new WP_Error( 'ha_invalid', 'Invalid response from Home Assistant.', [ 'status' => 500 ] );
-            }
+        $data = self::fetch_ha_data( $sensors );
+        if ( is_wp_error( $data ) ) {
+            return $data;
         }
+
+        // Cache the result for 30 seconds
+        set_transient( $cache_key, $data, 30 );
 
         return rest_ensure_response( $data );
+    }
+
+    public static function fetch_ha_data( $sensors ) {
+        if ( empty( $sensors ) ) return [];
+
+        $o = get_option( 'ha_powerflow_options', [] );
+        $ha_url   = isset( $o['ha_url'] )   ? rtrim( $o['ha_url'], '/' ) : '';
+        $ha_token = isset( $o['ha_token'] ) ? $o['ha_token']             : '';
+
+        if ( ! $ha_url || ! $ha_token ) {
+            return new WP_Error( 'not_configured', 'HA Powerflow is not configured.' );
+        }
+
+        $template_keys = [];
+        foreach ( $sensors as $key => $entity_id ) {
+            if ( $entity_id ) {
+                $template_keys[] = sprintf(
+                    '"%s": {"state": states("%s"), "unit": state_attr("%s", "unit_of_measurement")}',
+                    $key,
+                    $entity_id,
+                    $entity_id
+                );
+            }
+        }
+
+        if ( empty( $template_keys ) ) return [];
+
+        $template_content = sprintf(
+            '{%% set data = {%s} %%}{{ data | to_json }}',
+            implode( ',', $template_keys )
+        );
+
+        $headers = [
+            'Authorization' => 'Bearer ' . $ha_token,
+            'Content-Type'  => 'application/json',
+        ];
+
+        $start_time = microtime( true );
+        $response = wp_remote_post( $ha_url . '/api/template', [
+            'headers'   => $headers,
+            'body'      => json_encode( [ 'template' => $template_content ] ),
+            'timeout'   => 4,
+            'sslverify' => true,
+        ] );
+        $end_time = microtime( true );
+        $latency = round( ( $end_time - $start_time ) * 1000, 2 );
+
+        if ( is_wp_error( $response ) ) {
+            self::record_health_metric( $latency, false );
+            return $response;
+        }
+
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        $success = is_array( $body );
+        self::record_health_metric( $latency, $success );
+
+        if ( ! $success ) {
+            return new WP_Error( 'ha_invalid', 'Invalid response from Home Assistant.' );
+        }
+
+        $data = [];
+        foreach ( $body as $k => $v ) {
+            $data[ $k ] = [
+                'state' => isset( $v['state'] ) ? $v['state'] : 'N/A',
+                'unit'  => ( isset( $v['unit'] ) && $v['unit'] !== null ) ? $v['unit'] : '',
+            ];
+        }
+
+        return $data;
     }
 
     public static function discover_entities() {

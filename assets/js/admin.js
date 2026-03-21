@@ -275,26 +275,25 @@ jQuery(document).ready(function ($) {
         var $tbody = $('#ha-pf-custom-entities-table tbody');
         var index  = $tbody.find('tr').length;
         
-        var row = `
-            <tr data-index="${index}">
-                <td><input type="text" name="ha_powerflow_options[custom_entities][${index}][label]" class="widefat" placeholder="e.g. Temp" /></td>
-                <td><input type="text" name="ha_powerflow_options[custom_entities][${index}][entity]" class="widefat" placeholder="sensor.xyz" /></td>
-                <td>
-                    <div class="ha-pf-xy-group" style="display:flex;align-items:center;gap:5px;">
-                        <input type="number" name="ha_powerflow_options[custom_entities][${index}][x]" value="0" class="small-text" min="0" max="1000" />
-                        <input type="number" name="ha_powerflow_options[custom_entities][${index}][y]" value="0" class="small-text" min="0" max="700" />
-                        <button type="button" class="ha-pf-coord-picker-btn" title="Pick position from image">🎯</button>
-                    </div>
-                </td>
-                <td>
-                    <label class="ha-pf-toggle-label ha-pf-toggle-sm">
-                        <input type="checkbox" name="ha_powerflow_options[custom_entities][${index}][visible]" value="1" checked />
-                        <span class="ha-pf-slider"></span>
-                    </label>
-                </td>
-                <td><button type="button" class="button ha-pf-remove-entity">×</button></td>
-            </tr>
-        `;
+        var row = 
+            '<tr data-index="' + index + '">' +
+                '<td><input type="text" name="ha_powerflow_options[custom_entities][' + index + '][label]" class="widefat" placeholder="e.g. Temp" /></td>' +
+                '<td><input type="text" name="ha_powerflow_options[custom_entities][' + index + '][entity]" class="widefat" placeholder="sensor.xyz" /></td>' +
+                '<td>' +
+                    '<div class="ha-pf-xy-group" style="display:flex;align-items:center;gap:5px;">' +
+                        '<input type="number" name="ha_powerflow_options[custom_entities][' + index + '][x]" value="0" class="small-text" min="0" max="1000" />' +
+                        '<input type="number" name="ha_powerflow_options[custom_entities][' + index + '][y]" value="0" class="small-text" min="0" max="700" />' +
+                        '<button type="button" class="ha-pf-coord-picker-btn" title="Pick position from image">🎯</button>' +
+                    '</div>' +
+                '</td>' +
+                '<td>' +
+                    '<label class="ha-pf-toggle-label ha-pf-toggle-sm">' +
+                        '<input type="checkbox" name="ha_powerflow_options[custom_entities][' + index + '][visible]" value="1" checked />' +
+                        '<span class="ha-pf-slider"></span>' +
+                    '</label>' +
+                '</td>' +
+                '<td><button type="button" class="button ha-pf-remove-entity">×</button></td>' +
+            '</tr>';
         $tbody.append(row);
     });
 
@@ -448,9 +447,11 @@ jQuery(document).ready(function ($) {
     // ── Diagnostics Dashboard ─────────────────────────────────────────────
     function refreshDiags() {
         var $log = $('#ha-pf-diag-log');
-        var $status = $('#ha-pf-diag-status');
-        var $time = $('#ha-pf-diag-time');
+        var $status = $('#ha-pf-health-status');
+        var $latency = $('#ha-pf-health-latency');
+        var $sync = $('#ha-pf-health-last-sync');
 
+        var startTime = Date.now();
         $log.append('<div>[' + new Date().toLocaleTimeString() + '] Pinging HA...</div>');
 
         $.post(haPfAdmin.ajaxUrl, {
@@ -459,20 +460,27 @@ jQuery(document).ready(function ($) {
             ha_url: $('#ha_url').val(),
             ha_token: $('#ha_token').val()
         }, function(res) {
+            var endTime = Date.now();
+            var duration = endTime - startTime;
+            $latency.text(duration + 'ms');
+            $sync.text(new Date().toLocaleTimeString());
+
             if (res.success) {
-                $status.text('Connected').css('color', '#10b981');
-                $log.append('<div style="color:#10b981;">✓ ' + res.data + '</div>');
+                $status.text('Healthy').removeClass('disconnected degraded').addClass('healthy');
+                $log.append('<div style="color:#10b981;">✓ ' + res.data + ' (' + duration + 'ms)</div>');
             } else {
-                $status.text('Error').css('color', '#ef4444');
+                $status.text('Disconnected').removeClass('healthy degraded').addClass('disconnected');
                 $log.append('<div style="color:#ef4444;">✗ ' + res.data + '</div>');
             }
-            $time.text(new Date().toLocaleString());
             $log.scrollTop($log[0].scrollHeight);
         });
     }
 
     $('#ha-pf-diag-refresh').on('click', refreshDiags);
-    if ($('#ha-pf-diag-panel').length) setInterval(refreshDiags, 30000);
+    if ($('#ha-pf-health-dashboard').length) {
+        refreshDiags(); // Run once on load
+        setInterval(refreshDiags, 30000);
+    }
 
     // ── Live Preview Logic ───────────────────────────────────────────────
     function initLivePreview() {
@@ -517,6 +525,12 @@ jQuery(document).ready(function ($) {
                     // Color
                     cssVars['--ha-pf-' + prefix + '-color'] = options[prefix + '_color'] || line_color;
 
+                    // Sync Battery specific live preview values
+                    if (key === 'battery') {
+                        m.minDischarge = options['battery_min_discharge'] || 10;
+                        m.capacityKwh = options['battery_capacity_kwh'] || 13.5;
+                    }
+
                     // Visibility
                     $preview.find('#ha-pf-' + prefix + '-line, #ha-pf-' + prefix + '-path, #ha-pf-' + prefix + '-group').toggle(enabled);
                     
@@ -534,6 +548,7 @@ jQuery(document).ready(function ($) {
                             var baseOffset = 0;
                             if (selector.includes('power')) baseOffset = 24;
                             else if (selector.includes('soc') || selector.includes('energy') || selector.includes('efficiency')) baseOffset = 44;
+                            else if (selector.includes('battery-remaining')) baseOffset = 60;
                             else if (selector.includes('charge-added')) baseOffset = 58;
                             else if (selector.includes('plug-status'))  baseOffset = 71;
                             else if (selector.includes('charge-mode'))  baseOffset = 84;
@@ -580,7 +595,7 @@ jQuery(document).ready(function ($) {
                 var wy = options['weather_y'];
                 if (wx !== undefined && wy !== undefined) {
                     $preview.find('#ha-pf-weather').attr('x', wx).attr('y', dy = parseInt(wy) + 5);
-                    $preview.find('#ha-pf-weather-icon-group').attr('transform', `translate(${wx}, ${parseInt(wy) - 30})`);
+                    $preview.find('#ha-pf-weather-icon-group').attr('transform', 'translate(' + wx + ', ' + (parseInt(wy) - 30) + ')');
                 }
             }
 
@@ -646,7 +661,7 @@ jQuery(document).ready(function ($) {
                 var $cent = $preview.find('#ha-pf-custom-' + idx);
                 if ($cent.length) {
                     $cent.toggle(visible);
-                    $cent.attr('transform', `translate(${cx}, ${cy})`);
+                    $cent.attr('transform', 'translate(' + cx + ', ' + cy + ')');
                     $cent.find('text:first-child').text(label.toUpperCase());
                 }
             });
@@ -805,12 +820,14 @@ jQuery(document).ready(function ($) {
                         var isPriceIn = id.includes('-price-in');
                         var isPriceOut = id.includes('-price-out');
                         var isEnergyOut = id.includes('-energy-out');
+                        var isRemaining = id.includes('-remaining');
                         
                         var dy = 0;
                         if (isPower) dy = 24;
                         else if (isEnergy) dy = 44;
                         else if (isSoc && !isEnergy) dy = 44;
                         else if (isEnergyOut) dy = 58;
+                        else if (isRemaining) dy = 60;
                         else if (isPriceIn) dy = 72;
                         else if (isPriceOut) dy = 86;
                         
@@ -952,13 +969,11 @@ jQuery(document).ready(function ($) {
 
     // ── Tab Switching ──────────────────────────────────────────────────────
     function initTabs() {
-        var $tabs = $('.ha-pf-tab-btn');
-        var $contents = $('.ha-pf-tab-content');
         var storageKey = 'ha_pf_active_tab';
 
         function switchTab(tabId) {
-            $tabs.removeClass('active');
-            $contents.removeClass('active');
+            $('.ha-pf-tab-btn').removeClass('active');
+            $('.ha-pf-tab-content').removeClass('active');
 
             $('.ha-pf-tab-btn[data-tab="' + tabId + '"]').addClass('active');
             $('#ha-pf-tab-' + tabId).addClass('active');
@@ -966,7 +981,7 @@ jQuery(document).ready(function ($) {
             localStorage.setItem(storageKey, tabId);
         }
 
-        $tabs.on('click', function() {
+        $(document).on('click', '.ha-pf-tab-btn', function() {
             var tabId = $(this).data('tab');
             switchTab(tabId);
         });
@@ -1163,12 +1178,12 @@ jQuery(document).ready(function ($) {
     }
 
     function initHealthDashboard() {
-        const $status = $('#ha-pf-health-status-value');
-        const $latency = $('#ha-pf-health-latency');
-        const $rate = $('#ha-pf-health-rate');
-        const $lastSeen = $('#ha-pf-health-last-seen');
-        const $count = $('#ha-pf-health-count');
-        const $refreshBtn = $('#ha-pf-refresh-health');
+        var $status = $('#ha-pf-health-status-value');
+        var $latency = $('#ha-pf-health-latency');
+        var $rate = $('#ha-pf-health-rate');
+        var $lastSeen = $('#ha-pf-health-last-seen');
+        var $count = $('#ha-pf-health-count');
+        var $refreshBtn = $('#ha-pf-refresh-health');
 
         if (!$status.length) return;
 
@@ -1179,13 +1194,13 @@ jQuery(document).ready(function ($) {
                 nonce: haPfAdmin.nonce
             }, function(response) {
                 if (response.success) {
-                    const data = response.data;
+                    var data = response.data;
                     $status.text(data.status).removeClass('healthy degraded disconnected').addClass(data.status.toLowerCase());
                     $latency.text(data.avg_latency + ' ms');
                     $rate.text(data.success_rate + ' %');
                     
                     if (data.last_success > 0) {
-                        const date = new Date(data.last_success * 1000);
+                        var date = new Date(data.last_success * 1000);
                         $lastSeen.text(date.toLocaleTimeString());
                     } else {
                         $lastSeen.text('Never');
@@ -1212,14 +1227,7 @@ jQuery(document).ready(function ($) {
         }
     }
 
-    initPreviewToggle();
-    initLivePreview();
-    initPreviewSizeSelector();
-    initTabs();
-    initThemePresets();
-    initHealthDashboard();
-    initDragAndDrop();
-    initEvHistory();
+    // (Init calls moved to bottom)
 
     // ── EV History tab visibility tied to EV Quick Module toggle ───────────
     function syncEvHistoryTab() {
@@ -1232,14 +1240,6 @@ jQuery(document).ready(function ($) {
                 $('.ha-pf-tab-btn[data-tab="maintenance"]').after(
                     '<button type="button" class="ha-pf-tab-btn" data-tab="ev-history">⚡ EV History</button>'
                 );
-                // Re-bind the click handler for the new button
-                $('.ha-pf-tab-btn[data-tab="ev-history"]').on('click', function() {
-                    $('.ha-pf-tab-btn').removeClass('active');
-                    $('.ha-pf-tab-content').removeClass('active');
-                    $(this).addClass('active');
-                    $('#ha-pf-tab-ev-history').addClass('active');
-                    localStorage.setItem('ha_pf_active_tab', 'ev-history');
-                });
             }
         } else {
             // If currently on EV History tab, switch to Connection first
@@ -1283,6 +1283,62 @@ jQuery(document).ready(function ($) {
                     showMsg('Error: ' + (res.data || 'Unknown error.'), true);
                     $btn.prop('disabled', false).text('✕');
                 }
+            });
+        });
+
+        // ── Admin Markup Ranges ─────────────────────────────────────────────
+        $('#ha-pf-add-range').on('click', function() {
+            var $tbody = $('#ha-pf-markup-ranges tbody');
+            $tbody.append(
+                '<tr>' +
+                    '<td><input type="number" step="0.01" class="ha-pf-markup-min" value="0.00" /></td>' +
+                    '<td><input type="number" step="0.01" class="ha-pf-markup-max" value="9.99" /></td>' +
+                    '<td><input type="number" step="0.1" class="ha-pf-markup-pct" value="10.0" /></td>' +
+                    '<td><button type="button" class="button ha-pf-remove-range">×</button></td>' +
+                '</tr>'
+            );
+        });
+
+        $(document).on('click', '.ha-pf-remove-range', function() {
+            if ($(this).closest('tbody').find('tr').length > 1) {
+                $(this).closest('tr').remove();
+            }
+        });
+
+        // ── Save Booking Settings ──────────────────────────────────────────
+        $('#ha-pf-save-booking-settings').on('click', function() {
+            var $btn = $(this).prop('disabled', true).text('Saving...');
+            var $msg = $('#ha-pf-booking-msg');
+
+            var ranges = [];
+            $('#ha-pf-markup-ranges tbody tr').each(function() {
+                var $tr = $(this);
+                ranges.push({
+                    min: parseFloat($tr.find('.ha-pf-markup-min').val()),
+                    max: parseFloat($tr.find('.ha-pf-markup-max').val()),
+                    pct: parseFloat($tr.find('.ha-pf-markup-pct').val())
+                });
+            });
+
+            $.post(haPfAdmin.ajaxUrl, {
+                action:       'ha_pf_save_booking_settings',
+                nonce:        haPfAdmin.nonce,
+                markup_ranges: JSON.stringify(ranges),
+                max_duration: $('#ha-pf-max-duration').val(),
+                buffer:       $('#ha-pf-buffer').val(),
+                max_active:   $('#ha-pf-max-active').val(),
+                intel_mode:   $('#ha-pf-intel-mode').is(':checked') ? 1 : 0,
+                offpeak_start: $('#ha-pf-offpeak-start').val(),
+                offpeak_end:   $('#ha-pf-offpeak-end').val(),
+                peak_price:    $('#ha-pf-peak-price').val()
+            }, function(res) {
+                if (res.success) {
+                    $msg.text('✓ ' + res.data).css('color', '#16a34a');
+                } else {
+                    $msg.text('✗ ' + (res.data || 'Error')).css('color', '#dc2626');
+                }
+                setTimeout(function() { $msg.text(''); }, 3000);
+                $btn.prop('disabled', false).text('Save Booking Settings');
             });
         });
 
@@ -1337,8 +1393,8 @@ jQuery(document).ready(function ($) {
             });
         });
 
-        // ── Assign customer to session ─────────────────────────────────────
-        $tab.on('change', '.ha-pf-assign-customer', function() {
+        // ── Assign user to session ─────────────────────────────────────
+        $tab.on('change', '.ha_pf_assign_user', function() {
             var $sel      = $(this);
             var sessionId = $sel.data('session-id');
             $.post(haPfAdmin.ajaxUrl, {
@@ -1347,21 +1403,21 @@ jQuery(document).ready(function ($) {
                 session_id:  sessionId,
                 customer_id: $sel.val()
             }, function(res) {
-                if (!res.success) showMsg('Error assigning customer.', true);
+                if (!res.success) showMsg('Error assigning user.', true);
             });
         });
 
         // ── Export CSV ─────────────────────────────────────────────────────
         $('#ha-pf-export-csv').on('click', function() {
-            var rows = [['#','Customer','Date','Start','End','Duration','kWh','Base Cost','Co Charger Cost','Avg kW','Peak kW','Paid','Status']];
+            var rows = [['#','User','Date','Start','End','Duration','kWh','Base Cost','Co Charger Cost','Avg kW','Peak kW','Paid','Status']];
 
             $tab.find('#ha-pf-ev-history-table tbody tr').each(function() {
                 var $tr  = $(this);
                 var row  = [];
                 $tr.find('td').each(function(i) {
                     if (i === 1) {
-                        // Customer dropdown — get selected text
-                        row.push('"' + ($tr.find('.ha-pf-assign-customer option:selected').text().trim().replace(/"/g,'""')) + '"');
+                        // User dropdown — get selected text
+                        row.push('"' + ($tr.find('.ha_pf_assign_user option:selected').text().trim().replace(/"/g,'""')) + '"');
                     } else if (i === 11) {
                         // Payment checkbox
                         row.push($tr.find('.ha-pf-payment-checkbox').is(':checked') ? '"Yes"' : '"No"');
@@ -1383,121 +1439,20 @@ jQuery(document).ready(function ($) {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         });
-
-        // ── Customer management ────────────────────────────────────────────
-        var $custMsg    = $('#ha-pf-customer-msg');
-        var $custForm   = $('#ha-pf-customer-form');
-        var $custTitle  = $('#ha-pf-customer-form-title');
-        var $custId     = $('#ha-pf-customer-id-field');
-        var $custName   = $('#ha-pf-customer-name');
-        var $custEmail  = $('#ha-pf-customer-email');
-        var $custNotes  = $('#ha-pf-customer-notes');
-        var $cancelBtn  = $('#ha-pf-cancel-customer-edit');
-
-        function showCustMsg(text, isError) {
-            $custMsg.text(text).css('color', isError ? '#dc2626' : '#16a34a');
-            setTimeout(function() { $custMsg.text(''); }, 3000);
-        }
-
-        function resetCustomerForm() {
-            $custId.val('');
-            $custName.val('');
-            $custEmail.val('');
-            $custNotes.val('');
-            $custTitle.text('➕ Add New Customer');
-            $cancelBtn.hide();
-        }
-
-        $tab.on('click', '.ha-pf-edit-customer', function() {
-            var $btn = $(this);
-            $custId.val($btn.data('customer-id'));
-            $custName.val($btn.data('name'));
-            $custEmail.val($btn.data('email'));
-            $custNotes.val($btn.data('notes'));
-            $custTitle.text('✏️ Edit Customer: ' + $btn.data('name'));
-            $cancelBtn.show();
-            $custForm[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        });
-
-        $cancelBtn.on('click', resetCustomerForm);
-
-        $('#ha-pf-save-customer').on('click', function() {
-            var name = $custName.val().trim();
-            if (!name) { showCustMsg('Name is required.', true); return; }
-
-            $(this).prop('disabled', true).text('Saving…');
-            var self = this;
-            $.post(haPfAdmin.ajaxUrl, {
-                action:      'ha_pf_save_customer',
-                nonce:       haPfAdmin.nonce,
-                customer_id: $custId.val(),
-                name:        name,
-                email:       $custEmail.val().trim(),
-                notes:       $custNotes.val().trim()
-            }, function(res) {
-                $(self).prop('disabled', false).text('Save Customer');
-                if (res.success) {
-                    var c = res.data;
-                    var isEdit = !!$custId.val();
-
-                    if (isEdit) {
-                        // Update existing row
-                        var $row = $tab.find('#ha-pf-customers-table tr[data-customer-id="' + c.id + '"]');
-                        $row.find('td:eq(0)').html('<strong>' + $('<span>').text(c.name).html() + '</strong>');
-                        $row.find('td:eq(1)').text(c.email);
-                        $row.find('td:eq(2)').text(c.notes);
-                        $row.find('.ha-pf-edit-customer').data({ name: c.name, email: c.email, notes: c.notes });
-                        // Update all dropdowns in session table
-                        $tab.find('.ha-pf-assign-customer option[value="' + c.id + '"]').text(c.name);
-                        showCustMsg('Customer updated.');
-                    } else {
-                        // Add new row, remove "no customers" placeholder
-                        $('#ha-pf-no-customers-row').remove();
-                        var $tbody = $tab.find('#ha-pf-customers-table tbody');
-                        var $newRow = $('<tr data-customer-id="' + c.id + '">' +
-                            '<td><strong>' + $('<span>').text(c.name).html() + '</strong></td>' +
-                            '<td>' + $('<span>').text(c.email).html() + '</td>' +
-                            '<td>' + $('<span>').text(c.notes).html() + '</td>' +
-                            '<td>0</td>' +
-                            '<td>' +
-                            '<button type="button" class="button button-small ha-pf-edit-customer" data-customer-id="' + c.id + '" data-name="' + $('<span>').text(c.name).html() + '" data-email="' + $('<span>').text(c.email).html() + '" data-notes="' + $('<span>').text(c.notes).html() + '">Edit</button> ' +
-                            '<button type="button" class="button button-small ha-pf-delete-customer" data-customer-id="' + c.id + '" style="color:#dc2626;">✕</button>' +
-                            '</td></tr>');
-                        $tbody.append($newRow);
-                        // Add to all session dropdowns
-                        $tab.find('.ha-pf-assign-customer').append('<option value="' + c.id + '">' + $('<span>').text(c.name).html() + '</option>');
-                        showCustMsg('Customer added.');
-                    }
-                    resetCustomerForm();
-                } else {
-                    showCustMsg('Error: ' + (res.data || 'Unknown error.'), true);
-                }
-            });
-        });
-
-        $tab.on('click', '.ha-pf-delete-customer', function() {
-            var $btn = $(this);
-            var cid  = $btn.data('customer-id');
-            var name = $btn.closest('tr').find('td:first strong').text();
-            if (!confirm('Delete customer "' + name + '"? They will be unassigned from any sessions.')) return;
-
-            $btn.prop('disabled', true).text('…');
-            $.post(haPfAdmin.ajaxUrl, {
-                action:      'ha_pf_delete_customer',
-                nonce:       haPfAdmin.nonce,
-                customer_id: cid
-            }, function(res) {
-                if (res.success) {
-                    $btn.closest('tr').fadeOut(300, function() { $(this).remove(); });
-                    // Remove from all session dropdowns and reset any selections
-                    $tab.find('.ha-pf-assign-customer option[value="' + cid + '"]').remove();
-                    showMsg('Customer deleted.');
-                } else {
-                    $btn.prop('disabled', false).text('✕');
-                    showMsg('Error deleting customer.', true);
-                }
-            });
-        });
     }
+
+    // ── Initialization ─────────────────────────────────────────────────────
+    initPreviewToggle();
+    initLivePreview();
+    initPreviewSizeSelector();
+    initTabs();
+    initThemePresets();
+    initHealthDashboard();
+    initDragAndDrop();
+    
+    try {
+        initEvHistory();
+        syncEvHistoryTab(); // Initial sync on load
+    } catch(e) { console.error('EV History Init Error:', e); }
 
 });

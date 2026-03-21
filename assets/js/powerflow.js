@@ -28,9 +28,18 @@
     var enableHeatpump = function() { return isModOn('heatpump'); };
 
     var lastData = null;
+    var lastSuccessTime = Date.now();
+    var retryCount = 0;
+    var maxRetryCount = 5;
+    var baseRefreshInterval = parseInt(haPowerflow.refreshInterval) || 5000;
+    var currentRefreshInterval = baseRefreshInterval;
+
     try {
         var saved = sessionStorage.getItem('ha_pf_last_data');
-        if (saved) lastData = JSON.parse(saved);
+        if (saved) {
+            lastData = JSON.parse(saved);
+            lastSuccessTime = Date.now(); // Assume fresh on load if we have saved data? Or maybe not.
+        }
     } catch(e) {}
 
     var globalColor   = haPowerflow.lineColor    || '#4a90d9';
@@ -576,27 +585,50 @@
         $.ajax({
             url: haPowerflow.restUrl,
             method: 'GET',
-            success: function(d) { processResponse(d, false); },
+            success: function(d) { 
+                lastSuccessTime = Date.now();
+                retryCount = 0;
+                currentRefreshInterval = baseRefreshInterval;
+                $status.removeClass('ha-pf-error ha-pf-stale');
+                processResponse(d, false); 
+            },
             error: function (xhr) {
                 var msg = '⚠ API error';
+                retryCount++;
                 
-                // For a 400 or 500 thrown by WordPress REST API (like WP_Error), grab the JSON error message
+                // Exponential backoff
+                currentRefreshInterval = Math.min(60000, baseRefreshInterval * Math.pow(2, retryCount));
+
                 if (xhr.responseJSON && xhr.responseJSON.message) {
                     msg += ' — ' + xhr.responseJSON.message;
                 } else if (xhr.status === 0) {
-                    msg += ' — could not reach the server. Check your internet connection.';
+                    msg += ' — could not reach the server.';
                 } else {
-                    msg += ' (HTTP ' + xhr.status + '). Check browser console for details.';
+                    msg += ' (HTTP ' + xhr.status + ')';
                 }
                 
                 if (lastData) {
+                    $status.addClass('ha-pf-error').text(msg + ' (Showing last known data)');
                     processResponse(lastData, true);
                 } else {
                     $status.addClass('ha-pf-error').text(msg);
                 }
+            },
+            complete: function() {
+                setTimeout(fetchData, currentRefreshInterval);
             }
         });
     }
+
+    // Check for stale data every second
+    setInterval(function() {
+        if (isPreview || debugMode) return;
+        var now = Date.now();
+        var diff = now - lastSuccessTime;
+        if (diff > baseRefreshInterval * 3) {
+            $status.addClass('ha-pf-stale').html('⚠ Data may be stale (last update ' + Math.round(diff/1000) + 's ago)');
+        }
+    }, 1000);
 
     function simulateData() {
         var d = {
@@ -611,8 +643,8 @@
             pv_energy: { state: '18.2', unit: 'kWh' },
             pv1_power: { state: '180', unit: 'W' },
             pv2_power: { state: '170', unit: 'W' },
-            battery_power: { state: ((-300) - Math.random() * 200).toFixed(0), unit: 'W' },
-            battery_soc: { state: '85', unit: '%' },
+            battery_power: { state: ( -650 - Math.random() * 300 ).toFixed(0), unit: 'W' },
+            battery_soc: { state: '75', unit: '%' },
             ev_power: { state: '2100', unit: 'W' },
             ev_soc: { state: '42', unit: '%' },
             ev_charge_added: { state: '12.4', unit: 'kWh' },
@@ -691,8 +723,38 @@
         }
 
         // Grid Prices
-        svgText('ha-pf-grid-price-in', 'In Price: £' + (parseFloat(d.grid_price_in.state) || 0).toFixed(2));
+        var gridPriceIn = parseFloat(d.grid_price_in ? d.grid_price_in.state : 0);
+        svgText('ha-pf-grid-price-in', 'In Price: £' + (gridPriceIn || 0).toFixed(2));
         
+        // ── Grid Price Visuals & Savings ───────────────────────────────────
+        if (!isNaN(gridPriceIn)) {
+            var $gridPath = $widget.find('#ha-pf-grid-path');
+            var cheap = parseFloat(haPowerflow.gridPriceCheap) || 0.10;
+            var high = parseFloat(haPowerflow.gridPriceHigh) || 0.30;
+            
+            if (gridPriceIn <= cheap && gridPriceIn > 0) {
+                $gridPath.css('stroke', '#22c55e'); // Green
+            } else if (gridPriceIn >= high) {
+                $gridPath.css('stroke', '#ef4444'); // Red
+            } else {
+                $gridPath.css('stroke', ''); // Revert to CSS default
+            }
+
+            if (haPowerflow.gridShowSavings === 'true') {
+                var loadWatts = parseFloat(d.load_power.state) || 0;
+                var pvWatts = parseFloat(d.pv_power ? d.pv_power.state : 0) || 0;
+                
+                // Common solar/battery savings logic: 
+                // We save money on any self-consumed energy (Solar -> House)
+                // that would otherwise have been imported at gridPriceIn.
+                var savedWatts = Math.min(loadWatts, pvWatts);
+                var hourlySaving = (savedWatts * gridPriceIn) / 1000;
+                var symbol = haPowerflow.evCurrencySymbol || '£';
+                
+                $widget.find('#ha-pf-grid-savings').text('Saving: ' + symbol + hourlySaving.toFixed(2) + '/hr').show();
+            }
+        }
+
         var $gridPriceOut = $widget.find('#ha-pf-grid-price-out');
         if (showExport) {
             $gridPriceOut.show();
@@ -711,13 +773,53 @@
         }
 
         var batPowerVal = NaN;
+        var batUnit = (d.battery_power && d.battery_power.unit) || 'W';
         if (hasBat && d.battery_power) {
             batPowerVal = parseFloat(d.battery_power.state);
+            // Normalize to Watts if unit is kW
+            if (!isNaN(batPowerVal) && batUnit.toLowerCase().indexOf('kw') !== -1) {
+                batPowerVal = batPowerVal * 1000;
+            }
             svgText('ha-pf-battery-power', fmt(d.battery_power.state, d.battery_power.unit));
         }
         if (hasBat && d.battery_soc) {
             var socVal = parseFloat(d.battery_soc.state);
             svgText('ha-pf-battery-soc', isNaN(socVal) ? 'N/A' : socVal.toFixed(0) + '\u202f%');
+
+            // ── Battery Remaining Time ──────────────────────────────────────
+            var $batTime = $widget.find('#ha-pf-battery-time');
+            if ($batTime.length && !isNaN(batPowerVal) && !isNaN(socVal)) {
+                var batMod = (haPowerflow.modules && haPowerflow.modules.battery) ? haPowerflow.modules.battery : {};
+                var minSoc = parseFloat(batMod.minDischarge) || 10;
+                var capKwh = parseFloat(batMod.capacityKwh)  || 13.50;
+                var timeText = '';
+
+                if (batPowerVal < -50 && socVal > minSoc) { // Discharging
+                    var usableKwh = ((socVal - minSoc) / 100) * capKwh;
+                    var hours = usableKwh / (Math.abs(batPowerVal) / 1000);
+                    if (hours > 0) {
+                        var h = Math.floor(hours);
+                        var m = Math.round((hours - h) * 60);
+                        if (m === 60) { h++; m = 0; }
+                        timeText = 'Empty: ' + (h > 0 ? h + 'h ' : '') + m + 'm';
+                    }
+                } else if (batPowerVal > 50 && socVal < 100) { // Charging
+                    var neededKwh = ((100 - socVal) / 100) * capKwh;
+                    var hours = neededKwh / (batPowerVal / 1000);
+                    if (hours > 0) {
+                        var h = Math.floor(hours);
+                        var m = Math.round((hours - h) * 60);
+                        if (m === 60) { h++; m = 0; }
+                        timeText = 'Full: ' + (h > 0 ? h + 'h ' : '') + m + 'm';
+                    }
+                }
+
+                if (timeText) {
+                    $batTime.text(timeText).show();
+                } else {
+                    $batTime.hide();
+                }
+            }
         }
 
         var evPowerVal = NaN;
@@ -774,6 +876,22 @@
         var pvPowerVal = NaN;
         if (hasSolar && d.pv_power) {
             pvPowerVal = parseFloat(d.pv_power.state);
+        }
+
+        // ── Solar Forecast Update ──────────────────────────────────────────
+        var $pvForecast = $widget.find('#ha-pf-solar-forecast');
+        var $pvRing     = $widget.find('#ha-pf-solar-progress-ring');
+        if ($pvForecast.length && d.pv_energy && d.solar_forecast) {
+            var actualPv   = parseFloat(d.pv_energy.state) || 0;
+            var forecastPv = parseFloat(d.solar_forecast.state) || 0;
+            $pvForecast.text('Forecast: ' + forecastPv.toFixed(1) + '\u202fkWh');
+            
+            if ($pvRing.length && forecastPv > 0) {
+                var percent = Math.min(100, (actualPv / forecastPv) * 100);
+                var circ = 2 * Math.PI * 42; // r=42
+                var offset = circ * (percent / 100);
+                $pvRing.css('stroke-dasharray', offset + ' ' + circ);
+            }
         }
 
         var weatherOn = isModOn('weather');
@@ -870,8 +988,6 @@
 
     $(document).ready(function () {
         fetchData();
-        var interval = isPreview ? 2000 : haPowerflow.refreshInterval;
-        setInterval(fetchData, interval);
 
         // Register Service Worker for PWA
         if ('serviceWorker' in navigator) {

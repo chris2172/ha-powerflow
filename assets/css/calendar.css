@@ -1,0 +1,309 @@
+/* EV Booking Calendar Styles */
+.ha-pf-calendar-container {
+    --hapf-bg: #fff;
+    --hapf-border: #e2e8f0;
+    --hapf-text: #1e293b;
+    --hapf-muted: #64748b;
+    --hapf-primary: #1a73e8;
+    
+    --hapf-slot-avail: #f8fafc;
+    --hapf-slot-mine: #10b981;
+    --hapf-slot-booked: #3b82f6;
+    
+    background: var(--hapf-bg);
+    border: 1px solid var(--hapf-border);
+    border-radius: 12px;
+    padding: 24px;
+    margin: 20px 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+.ha-pf-calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.ha-pf-calendar-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--hapf-text);
+}
+
+.ha-pf-calendar-nav {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#ha-pf-week-range {
+    font-weight: 700;
+    color: var(--hapf-primary);
+    min-width: 140px;
+    text-align: center;
+}
+
+/* Button Styles */
+.ha-pf-btn {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.ha-pf-btn:hover {
+    background: #e2e8f0;
+}
+
+.ha-pf-btn--primary {
+    background: var(--hapf-primary);
+    color: white;
+    border-color: #1557b0;
+}
+
+.ha-pf-btn--primary:hover {
+    background: #1557b0;
+}
+
+/* Grid Layout */
+.ha-pf-calendar-grid {
+    display: grid;
+    grid-template-columns: 60px repeat(7, 1fr);
+    border: 1px solid var(--hapf-border);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.ha-pf-calendar-grid > div {
+    border-right: 1px solid #f1f5f9;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+/* Header (Days) */
+.ha-pf-day-header {
+    padding: 12px 5px;
+    text-align: center;
+    font-weight: 700;
+    background: #f8fafc;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.ha-pf-day-header .day-name { display: block; font-size: 14px; }
+.ha-pf-day-header .day-date { font-size: 11px; opacity: 0.7; }
+
+/* Time column header */
+.ha-pf-time-header {
+    background: #f1f5f9;
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 11;
+}
+
+/* Day Colors */
+.day-0 { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); color: #1e40af; }
+.day-1 { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); color: #166534; }
+.day-2 { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); color: #991b1b; }
+.day-3 { background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); color: #92400e; }
+.day-4 { background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); color: #6b21a8; }
+.day-5 { background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); color: #5b21b6; }
+.day-6 { background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%); color: #155e75; }
+
+/* Time Slots */
+.ha-pf-time-column {
+    background: #f8fafc;
+    text-align: right;
+    padding-right: 8px;
+    font-size: 11px;
+    color: var(--hapf-muted);
+    font-weight: 600;
+    line-height: 38px;
+    height: 40px;
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    border-right: 2px solid var(--hapf-border) !important;
+}
+
+.ha-pf-slot {
+    height: 40px;
+    background: var(--hapf-slot-avail);
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    padding: 2px;
+    overflow: hidden;
+    text-align: center;
+}
+
+.ha-pf-slot:hover {
+    background: #f1f5f9;
+}
+
+.ha-pf-slot.is-mine {
+    background: var(--hapf-slot-mine);
+    color: white;
+    cursor: default;
+}
+
+.ha-pf-slot.is-booked {
+    background: var(--hapf-slot-booked);
+    color: white;
+    cursor: default;
+}
+
+.ha-pf-slot span {
+    pointer-events: none;
+}
+/* Booking Estimate */
+.ha-pf-booking-estimate {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 15px;
+    margin: 20px 0;
+}
+.estimate-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+.estimate-row span:last-child {
+    font-weight: 700;
+    color: #1e293b;
+}
+#ha-pf-est-cost {
+    color: #7c3aed !important;
+    font-size: 16px;
+}
+.estimate-disclaimer {
+    font-size: 11px;
+    color: #94a3b8;
+    text-align: right;
+    font-style: italic;
+    margin-top: 5px;
+}
+/* Legend */
+.ha-pf-calendar-legend {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+    justify-content: center;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--hapf-muted);
+}
+
+.legend-item .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.legend-item.available .dot { background: var(--hapf-slot-avail); border: 1px solid var(--hapf-border); }
+.legend-item.mine      .dot { background: var(--hapf-slot-mine); }
+.legend-item.booked    .dot { background: var(--hapf-slot-booked); }
+
+/* Modal */
+.ha-pf-modal {
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ha-pf-modal-content {
+    background-color: #fefefe;
+    padding: 30px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 400px;
+    position: relative;
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+}
+
+.ha-pf-close {
+    position: absolute;
+    right: 20px;
+    top: 15px;
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.ha-pf-close:hover { color: black; }
+
+.ha-pf-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.ha-pf-modal-field {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ha-pf-modal-field label {
+    font-weight: 700;
+    color: var(--hapf-text);
+    font-size: 14px;
+}
+
+.ha-pf-select {
+    padding: 10px;
+    border: 1px solid var(--hapf-border);
+    border-radius: 8px;
+    background: #fff;
+    font-size: 14px;
+    color: var(--hapf-text);
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.ha-pf-select:focus {
+    border-color: var(--hapf-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .ha-pf-calendar-grid {
+        grid-template-columns: 60px repeat(7, 120px);
+        overflow-x: auto;
+    }
+}

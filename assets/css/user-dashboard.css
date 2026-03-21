@@ -1,0 +1,78 @@
+.ha-pf-user-dashboard {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    margin: 20px 0;
+}
+.ha-pf-user-dashboard h3 {
+    margin-top: 0;
+    color: #1e293b;
+    border-bottom: 2px solid #f1f5f9;
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+}
+.ha-pf-booking-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+.ha-pf-booking-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.ha-pf-booking-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+.card-date {
+    font-weight: 700;
+    color: #7c3aed;
+    font-size: 16px;
+}
+.card-time {
+    color: #64748b;
+    font-size: 14px;
+    font-family: monospace;
+}
+.card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+.ha-pf-btn-sm {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.ha-pf-btn-sm:hover {
+    background: #f1f5f9;
+}
+.ha-pf-btn-cancel {
+    color: #ef4444;
+    border-color: #fee2e2;
+}
+.ha-pf-btn-cancel:hover {
+    background: #fef2f2;
+}
+.ha-pf-empty-msg {
+    color: #94a3b8;
+    font-style: italic;
+    text-align: center;
+    padding: 40px 0;
+}

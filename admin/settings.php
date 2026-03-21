@@ -109,7 +109,8 @@ function ha_pf_create_snapshot( $old_val, $new_val = null ) {
 
 add_action( 'admin_enqueue_scripts', 'ha_powerflow_admin_assets' );
 function ha_powerflow_admin_assets( $hook ) {
-    if ( $hook !== 'toplevel_page_ha-powerflow' ) return;
+    if ( strpos( $hook, 'ha-powerflow' ) === false ) return;
+    $o = get_option( 'ha_powerflow_options', [] );
     wp_enqueue_media();
     wp_enqueue_style( 'wp-color-picker' );
     wp_enqueue_style( 'ha-powerflow-admin-style', HA_POWERFLOW_URL . 'assets/css/admin.css', [], HA_POWERFLOW_VERSION );
@@ -138,8 +139,14 @@ function ha_powerflow_admin_assets( $hook ) {
     ] );
 
     // Also localize haPowerflow object for the preview logic in admin.js
+    $localized_modules_full = $localized_modules;
+    if ( isset( $localized_modules_full['battery'] ) ) {
+        $localized_modules_full['battery']['minDischarge'] = (int) ( $o['battery_min_discharge'] ?? 10 );
+        $localized_modules_full['battery']['capacityKwh']  = floatval( $o['battery_capacity_kwh'] ?? 13.5 );
+    }
+
     wp_localize_script( 'ha-powerflow-admin', 'haPowerflow', [
-        'modules' => $localized_modules
+        'modules' => $localized_modules_full
     ] );
 }
 
@@ -169,7 +176,13 @@ function ha_powerflow_sanitize( $input ) {
         'grid_energy_out'     => sanitize_text_field( $input['grid_energy_out']     ?? '' ),
         'grid_price_in'       => sanitize_text_field( $input['grid_price_in']       ?? '' ),
         'grid_price_out'      => sanitize_text_field( $input['grid_price_out']      ?? '' ),
+        'grid_price_cheap'    => floatval( $input['grid_price_cheap']             ?? 0.10 ),
+        'grid_price_high'     => floatval( $input['grid_price_high']              ?? 0.30 ),
+        'grid_show_savings'   => ! empty( $input['grid_show_savings'] )           ? '1' : '',
+        'battery_min_discharge' => (int) ( $input['battery_min_discharge'] ?? 10 ),
+        'battery_capacity_kwh'  => floatval( $input['battery_capacity_kwh'] ?? 13.50 ),
         'load_energy'         => sanitize_text_field( $input['load_energy']         ?? '' ),
+        'solar_forecast'      => sanitize_text_field( $input['solar_forecast']      ?? '' ),
         'bg_image'            => esc_url_raw(        $input['bg_image']             ?? '' ),
         'grid_line'           => preg_replace( '/[^MmLlHhVvCcSsQqTtAaZz\d\s,.\-+]/', '', $input['grid_line']         ?? '' ),
         'load_line'           => preg_replace( '/[^MmLlHhVvCcSsQqTtAaZz\d\s,.\-+]/', '', $input['load_line']         ?? '' ),
@@ -221,10 +234,12 @@ function ha_powerflow_sanitize( $input ) {
             $output[$prefix . '_max_capacity'] = (int) ( $input[$prefix . '_max_capacity'] ?? $m['default_capacity'] );
         }
 
-        // Special battery split energy
+        // Special battery settings
         if ( $key === 'battery' ) {
             $output['battery_in_energy']  = sanitize_text_field( $input['battery_in_energy']  ?? '' );
             $output['battery_out_energy'] = sanitize_text_field( $input['battery_out_energy'] ?? '' );
+            $output['battery_min_discharge'] = (int) ( $input['battery_min_discharge'] ?? 10 );
+            $output['battery_capacity_kwh']  = floatval( $input['battery_capacity_kwh'] ?? 13.5 );
         }
 
         // EV extra fields
@@ -241,6 +256,20 @@ function ha_powerflow_sanitize( $input ) {
             $output['ev_miles_per_kwh']         = floatval( $input['ev_miles_per_kwh']           ?? 3.5 );
             $output['ev_session_expected_hours'] = floatval( $input['ev_session_expected_hours'] ?? 4.0 );
             $output['ev_co2_factor']             = floatval( $input['ev_co2_factor']             ?? 0.5 );
+
+            // Booking & Markup settings (preserve these)
+            $output['ev_booking_markup_ranges'] = ! empty( $input['ev_booking_markup_ranges'] ) ? $input['ev_booking_markup_ranges'] : [];
+            $output['ev_booking_max_duration']   = floatval( $input['ev_booking_max_duration']   ?? 4.0 );
+            $output['ev_booking_buffer']       = intval( $input['ev_booking_buffer']       ?? 15 );
+            $output['ev_booking_max_active']   = intval( $input['ev_booking_max_active']   ?? 1 );
+            $output['ev_booking_intel_mode']   = ! empty( $input['ev_booking_intel_mode'] )  ? '1' : '';
+            $output['ev_booking_offpeak_start'] = sanitize_text_field( $input['ev_booking_offpeak_start'] ?? '23:30' );
+            $output['ev_booking_offpeak_end']   = sanitize_text_field( $input['ev_booking_offpeak_end']   ?? '05:30' );
+            $output['ev_booking_peak_price']    = floatval( $input['ev_booking_peak_price']    ?? 0.30 );
+        }
+
+        if ( $key === 'solar' ) {
+            $output['solar_forecast_vis'] = ! empty( $input['solar_show_forecast'] ) ? '1' : '';
         }
     }
     $output['custom_entities'] = ! empty( $input['custom_entities'] ) && is_array( $input['custom_entities'] ) ? array_map( function( $item ) {
@@ -249,6 +278,7 @@ function ha_powerflow_sanitize( $input ) {
             'entity'  => sanitize_text_field( $item['entity'] ?? '' ),
             'x'       => (int) ( $item['x'] ?? 0 ),
             'y'       => (int) ( $item['y'] ?? 0 ),
+            'font_size' => (int) ( $item['font_size'] ?? 19 ),
             'visible' => ! empty( $item['visible'] ) ? '1' : '',
         ];
     }, array_values( $input['custom_entities'] ) ) : [];
@@ -257,6 +287,17 @@ function ha_powerflow_sanitize( $input ) {
     $output['house_max_capacity'] = (int) ( $input['house_max_capacity'] ?? 8000 );
 
     $output['theme_preset'] = sanitize_text_field( $input['theme_preset'] ?? 'custom' );
+
+    $existing = get_option( 'ha_powerflow_options', [] );
+    foreach ( [
+        'ev_booking_markup_ranges', 'ev_booking_max_duration', 'ev_booking_buffer',
+        'ev_booking_max_active', 'ev_booking_intel_mode', 'ev_booking_offpeak_start',
+        'ev_booking_offpeak_end', 'ev_booking_peak_price'
+    ] as $key ) {
+        if ( ! isset( $input[$key] ) ) {
+            $output[$key] = $existing[$key] ?? ( strpos($key, 'ranges') !== false ? [] : '' );
+        }
+    }
 
     return $output;
 }
